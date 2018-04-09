@@ -6,6 +6,7 @@
 #define INFO(_format_,...)  printf("INFO      "); printf((_format_),##__VA_ARGS__); printf("\n");
 #define WARN(_format_,...)  printf("WARNING   "); printf((_format_),##__VA_ARGS__); printf("\n");
 #define ERROR(_format_,...) printf("ERROR     "); printf((_format_),##__VA_ARGS__); printf("\n");
+#define DEATH(_format_,...) printf("DEATH     "); printf((_format_),##__VA_ARGS__); printf("\n"); exit(1);
 
 class DatagramTunneler {
 public:
@@ -56,5 +57,7 @@ static const size_t MAX_DGRAM_LEN = 1472; //jumbo frames are not supported
     void runClient();
     void runServer();
 
-    Config cfg_;
+    Config  cfg_;
+    int     udp_socket_;
+    //int     tcp_socket_;
 };

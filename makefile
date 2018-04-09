@@ -1,7 +1,17 @@
-CPPFLAGS=-Wall
+CPPFLAGS=-Wall -Werror #-Wpedantic #TODO: make compiler as strict as possible
+RM=rm -f
+SRC_DIR=src/
+BUILD_DIR=build/
+BIN_DIR=bin/
 
-./bin/datagramtunneler: DatagramTunneler.o
-	g++ DatagramTunneler.o -o ./bin/datagramtunneler
+$(BIN_DIR)datagramtunneler: $(BUILD_DIR)DatagramTunneler.o $(BUILD_DIR)main.o
+	g++ $(BUILD_DIR)DatagramTunneler.o $(BUILD_DIR)main.o -o $(BIN_DIR)datagramtunneler
 
-DatagramTunneler.o: ./src/DatagramTunneler.h ./src/DatagramTunneler.cpp
-	g++ $(CPPFLAGS) -c ./src/DatagramTunneler.cpp
+$(BUILD_DIR)main.o: $(SRC_DIR)main.cpp $(BUILD_DIR)DatagramTunneler.o
+	g++ $(CPPFLAGS) -o $(BUILD_DIR)main.o -c $(SRC_DIR)main.cpp
+
+$(BUILD_DIR)DatagramTunneler.o: $(SRC_DIR)DatagramTunneler.h $(SRC_DIR)DatagramTunneler.cpp #$(SRC_DIR)main.cpp
+	g++ $(CPPFLAGS) -o $(BUILD_DIR)/DatagramTunneler.o -c $(SRC_DIR)DatagramTunneler.cpp #$(SRC_DIR)main.cpp
+
+clean:
+	$(RM) ./bin/* ./build/*
