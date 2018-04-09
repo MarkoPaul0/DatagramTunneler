@@ -12,7 +12,7 @@ class DatagramTunneler {
 public:
     struct ClientCfg {
         uint32_t udp_dst_ip_;   // UDP destination IP (multicast group ip)
-        uint16_t udp_port_;     // UDP destination port //TODO: 0?
+        uint16_t udp_dst_port_;     // UDP destination port //TODO: 0?
         uint32_t udp_iface_ip_; // Interface used to listen to multicast data
         uint32_t srv_ip_;       // TCP IP of DatagramTunneler server    
         uint16_t srv_port_;     // TCP port of DatagramTunneler server
@@ -31,8 +31,8 @@ public:
     struct Config {
         bool            is_client_;
         union {
-            ClientCfg   client_cfg_;
-            ServerCfg   server_cfg_;
+            ClientCfg   client_;
+            ServerCfg   server_;
         };
     };
 
