@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdio>
 #include <cstdint>
+#include <assert.h>
 
 #define INFO(_format_,...) printf("INFO      "); printf((_format_),##__VA_ARGS__); printf("\n");
 #define WARN(_format_,...) printf("WARNING   "); printf((_format_),##__VA_ARGS__); printf("\n");
@@ -38,10 +39,14 @@ public:
     DatagramTunneler(Config cfg); 
     ~DatagramTunneler();
 private:
+static const size_t MAX_DGRAM_LEN = 1472; //jumbo frames are not supported
+#pragma pack(push,1)
     struct Datagram {
-        uint32_t udp_dst_ip_;   // UDP destination address 
-        uint16_t udp_dst_port_; // UDP destination port
-        uint16_t datalen_;      // Datagram length
-        char*    databuf_;      // Datagram buffer
+        uint32_t udp_dst_ip_;               // UDP destination address 
+        uint16_t udp_dst_port_;             // UDP destination port
+        uint16_t datalen_;                  // Datagram length
+        char     databuf_[MAX_DGRAM_LEN];   // Datagram buffer
     };
+    static_assert(sizeof(Datagram) == 1480, "The Datagram struct should be 1480 bytes long!");
+#pragma pack(pop)
 };
