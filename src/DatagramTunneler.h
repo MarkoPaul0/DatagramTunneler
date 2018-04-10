@@ -54,6 +54,8 @@ static const size_t MAX_DGRAM_LEN = 1472; //jumbo frames are not supported
     static_assert(sizeof(Datagram) == 1480, "The Datagram struct should be 1480 bytes long!");
 #pragma pack(pop)
 
+    void getNextDatagram(Datagram* const dgram);
+    void sendDatagramToServer(const Datagram* dgram);
     void runClient();
     void runServer();
 

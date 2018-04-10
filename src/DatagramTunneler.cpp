@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cerrno>
 #include <unistd.h>
+#include <cstdint>
 
 #include <sys/types.h>
 //for inet_addr();
@@ -26,19 +27,6 @@ DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
             DEATH("Could not bind UDP socket!");
         }
 
-        ip_mreq udp_group;
-        udp_group.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
-        udp_group.imr_interface.s_addr = inet_addr("192.168.0.104");
-        if(setsockopt(udp_socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, reinterpret_cast<char*>(&udp_group), sizeof(udp_group)) < 0) {
-            DEATH("Could not join multicast group %d", errno);
-        }
-
-        char data[2048];
-        int len_read = 0;
-        if((len_read = read(udp_socket_, data, 2048)) < 0) {
-            DEATH("Unable to read data from UDP socket %d", errno);
-        }
-        INFO("Read udp packet of %d bytes", len_read);
 
 
     } else {
@@ -59,8 +47,37 @@ void DatagramTunneler::run() {
     }
 }
 
+void DatagramTunneler::getNextDatagram(Datagram* const dgram) {
+    int len_read = 0;
+    if((len_read = read(udp_socket_, dgram->databuf_, MAX_DGRAM_LEN)) < 0) {
+        //TODO: handle errors and edge cases such as jumbo frames
+        DEATH("Unable to read data from UDP socket %d", errno);
+    }
+    assert(len_read <= UINT16_MAX);
+    //tODO: handle case where len_read = 0
+    INFO("Read udp packet of %d bytes", len_read);
+    dgram->datalen_ = static_cast<uint16_t>(len_read);
+}
+
+void DatagramTunneler::sendDatagramToServer(const Datagram* dgram) {
+    INFO("Sending datagram to server via TCP");
+}
+
 void DatagramTunneler::runClient() {
     INFO("DatagramTunneler is now running as a client...");
+    ip_mreq udp_group;
+    udp_group.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
+    udp_group.imr_interface.s_addr = inet_addr("192.168.0.104");
+    if(setsockopt(udp_socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &udp_group, sizeof(udp_group)) < 0) {
+        DEATH("Could not join multicast group %d", errno);
+    }
+
+    Datagram dgram;
+    //TODO: pupulate UDP IP and port into datagram once and for all
+    while (true) {
+        getNextDatagram(&dgram);
+        sendDatagramToServer(&dgram);
+    }
 }
 
 void DatagramTunneler::runServer() {
