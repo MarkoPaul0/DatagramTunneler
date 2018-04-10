@@ -9,11 +9,13 @@
 #include <sys/types.h>
 //for inet_addr();
 #include <arpa/inet.h>
+static const int NO_FLAGS = 0;
 
 DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
     INFO("DatagramTunneler construction");
     if (cfg.is_client_) {
-        udp_socket_ = socket(AF_INET, SOCK_DGRAM, 0);
+        // UDP SOCKET SETUP
+        udp_socket_ = socket(AF_INET, SOCK_DGRAM, NO_FLAGS);
         if (udp_socket_ < 0) {
             DEATH("Could not create UDP socket!");
         }
@@ -27,7 +29,19 @@ DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
             DEATH("Could not bind UDP socket!");
         }
 
-
+        //TCP SOCKET SETUP
+        tcp_socket_ = socket(AF_INET , SOCK_STREAM , NO_FLAGS);
+		if (tcp_socket_ < 0) {
+            DEATH("Could not create TCP socket!");
+        }
+        sockaddr_in server_addr;
+        server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        server_addr.sin_family = AF_INET;
+  	    server_addr.sin_port = htons(28014);
+        //TODO: move the connection to run the function maybe?
+        if (connect(tcp_socket_, reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)) < 0) {
+            DEATH("Unable to connect to server %d", errno);
+        }
 
     } else {
         //TODO: 
@@ -61,10 +75,14 @@ void DatagramTunneler::getNextDatagram(Datagram* const dgram) {
 
 void DatagramTunneler::sendDatagramToServer(const Datagram* dgram) {
     INFO("Sending datagram to server via TCP");
+    if(send(tcp_socket_, dgram, dgram->size(), NO_FLAGS) < 0) { //TODO: review no flags
+        DEATH("Unable to send data to server!");
+    }
 }
 
 void DatagramTunneler::runClient() {
     INFO("DatagramTunneler is now running as a client...");
+
     ip_mreq udp_group;
     udp_group.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
     udp_group.imr_interface.s_addr = inet_addr("192.168.0.104");
