@@ -14,6 +14,7 @@ static const int NO_FLAGS = 0;
 DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
     INFO("DatagramTunneler construction");
     if (cfg.is_client_) {
+        INFO("CLIENT SETUP!");
         // UDP SOCKET SETUP
         udp_socket_ = socket(AF_INET, SOCK_DGRAM, NO_FLAGS);
         if (udp_socket_ < 0) {
@@ -43,8 +44,37 @@ DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
             DEATH("Unable to connect to server %d", errno);
         }
 
-    } else {
-        //TODO: 
+    } else { //SERVER SETUP
+        INFO("SERVER SETUP!");
+        // UDP SOCKET SETUP
+        udp_socket_ = socket(AF_INET, SOCK_DGRAM, NO_FLAGS);
+        if (udp_socket_ < 0) {
+            DEATH("Could not create UDP socket!");
+        }
+        
+        in_addr iface;
+        iface.s_addr = inet_addr("192.168.0.104");
+        if(setsockopt(udp_socket_, IPPROTO_IP, IP_MULTICAST_IF, &iface, sizeof(iface)) < 0) {
+            DEATH("Could not set UDP publisher interface");
+        }
+        
+        sockaddr_in group_addr;
+        memset(&group_addr, 0, sizeof(group_addr));
+        group_addr.sin_family = AF_INET; 
+        group_addr.sin_port = htons(1234);
+        group_addr.sin_addr.s_addr = inet_addr("228.14.28.52");
+        
+        Datagram dgram;
+        if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, NO_FLAGS, reinterpret_cast<struct sockaddr*>(&group_addr), sizeof(group_addr)) < 0) {
+            DEATH("Unable to publish UDP data!");
+        }
+        INFO("Sent data to multicast group!");
+
+        //TCP SOCKET SETUP
+        tcp_socket_ = socket(AF_INET , SOCK_STREAM , NO_FLAGS);
+		if (tcp_socket_ < 0) {
+            DEATH("Could not create TCP socket!");
+        }
     }
 }
 
