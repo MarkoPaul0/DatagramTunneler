@@ -38,7 +38,7 @@ DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
         sockaddr_in server_addr;
         server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
         server_addr.sin_family = AF_INET;
-  	    server_addr.sin_port = htons(28014);
+  	    server_addr.sin_port = htons(24052);
         //TODO: move the connection to run the function maybe?
         if (connect(tcp_socket_, reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)) < 0) {
             DEATH("Unable to connect to server %d", errno);
@@ -75,6 +75,15 @@ DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
 		if (tcp_socket_ < 0) {
             DEATH("Could not create TCP socket!");
         }
+
+        sockaddr_in tcp_iface;
+        tcp_iface.sin_family = AF_INET;
+        tcp_iface.sin_port = htons (24052);
+        tcp_iface.sin_addr.s_addr = htonl (INADDR_ANY);
+        if(bind(tcp_socket_, reinterpret_cast<sockaddr*>(&tcp_iface), sizeof(tcp_iface)) < 0) {
+            DEATH("Could not bind TCP socket!");
+        }
+
     }
 }
 
@@ -130,4 +139,30 @@ void DatagramTunneler::runClient() {
 
 void DatagramTunneler::runServer() {
     INFO("DatagramTunneler is now running as a server...");
+    INFO("Listening on port 24052..");
+    listen(tcp_socket_,1);
+    while(true) {
+        sockaddr remote;
+        socklen_t sosize  = sizeof(remote);
+        int new_fd = accept(tcp_socket_, &remote, &sosize);
+        if (new_fd < 0) {
+            DEATH("Accept error!");
+        }
+        INFO("Now receiving data from the connection");
+        char data[2048];
+        while(true) {
+            int len_read = recv(new_fd, data, 2048, NO_FLAGS);
+            if (len_read < 0) {
+                DEATH("ERROR While reading");
+            }
+            INFO("Received %d bytes", len_read);
+        }
+    }
 }
+
+
+
+
+
+
+
