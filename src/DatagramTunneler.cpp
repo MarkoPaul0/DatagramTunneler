@@ -58,17 +58,6 @@ DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
             DEATH("Could not set UDP publisher interface");
         }
         
-        sockaddr_in group_addr;
-        memset(&group_addr, 0, sizeof(group_addr));
-        group_addr.sin_family = AF_INET; 
-        group_addr.sin_port = htons(1234);
-        group_addr.sin_addr.s_addr = inet_addr("228.14.28.52");
-        
-        Datagram dgram;
-        if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, NO_FLAGS, reinterpret_cast<struct sockaddr*>(&group_addr), sizeof(group_addr)) < 0) {
-            DEATH("Unable to publish UDP data!");
-        }
-        INFO("Sent data to multicast group!");
 
         //TCP SOCKET SETUP
         tcp_socket_ = socket(AF_INET , SOCK_STREAM , NO_FLAGS);
@@ -140,6 +129,11 @@ void DatagramTunneler::runClient() {
 void DatagramTunneler::runServer() {
     INFO("DatagramTunneler is now running as a server...");
     INFO("Listening on port 24052..");
+    sockaddr_in group_addr;
+    memset(&group_addr, 0, sizeof(group_addr));
+    group_addr.sin_family = AF_INET; 
+    group_addr.sin_port = htons(1234);
+    group_addr.sin_addr.s_addr = inet_addr("228.14.28.52");
     listen(tcp_socket_,1);
     while(true) {
         sockaddr remote;
@@ -156,6 +150,12 @@ void DatagramTunneler::runServer() {
                 DEATH("ERROR While reading");
             }
             INFO("Received %d bytes", len_read);
+        
+            Datagram dgram;
+            if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, NO_FLAGS, reinterpret_cast<struct sockaddr*>(&group_addr), sizeof(group_addr)) < 0) {
+                DEATH("Unable to publish UDP data!");
+            }
+            INFO("Sent data to multicast group 228.14.28.52!");
         }
     }
 }
