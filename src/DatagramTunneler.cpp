@@ -8,6 +8,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 static const int NO_FLAGS = 0;
+#ifndef MSG_NOSIGNAL
+//MSG_NOSIGNAL is posix but somehow not portable (undefined on OSX) 
+#define MSG_NOSIGNAL NO_FLAGS
+#endif
 
 DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
     if (cfg.is_client_) {
@@ -54,6 +58,17 @@ void DatagramTunneler::setupClient(const Config& cfg) {
     if (tcp_socket_ < 0) {
         DEATH("Could not create TCP socket!");
     }
+
+    //OSX only
+#ifdef __APPLE__
+    // If the TCP server crashes, the client will just exit abruptly because the client socket sends
+    // a sigpipe signal when invoking send() instead of returning -1 and setting the errno
+    // on other distributions, we use MSG_NOSIGNAL when invoking send()
+    int set = 1;
+    if (setsockopt(tcp_socket_, SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set)) < 0) {
+        DEATH("Could not prevent TCP socket to send SIGPIPE on disconnect! Error %d", errno);
+    }
+#endif
 }
 
 void DatagramTunneler::runClient() {
@@ -89,9 +104,10 @@ void DatagramTunneler::runClient() {
         assert(len_read <= UINT16_MAX);
         dgram.datalen_ = static_cast<uint16_t>(len_read);
         if (dgram.datalen_ > 0) {
-            if(send(tcp_socket_, &dgram, dgram.size(), NO_FLAGS) < 0) { //TODO: review no flags
+            if(send(tcp_socket_, &dgram, dgram.size(), NO_FLAGS) < 0) { 
                 DEATH("Unable to send data to server! Error %d", errno);
             }
+            //TODO: look at the number of bytes actually written to socket
             INFO("Tunneled a %u byte datagram to server.", dgram.datalen_);
         }
     }
@@ -169,7 +185,7 @@ void DatagramTunneler::runServer() {
             pub_group.sin_addr.s_addr = dgram.udp_dst_ip_;
         }
     
-        if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, NO_FLAGS, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
+        if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, MSG_NOSIGNAL, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
             DEATH("Unable to publish multicast data, sendto() error %d!", errno);
         }
 
