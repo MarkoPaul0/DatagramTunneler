@@ -57,7 +57,6 @@ void DatagramTunneler::setupClient(const Config& cfg) {
 }
 
 void DatagramTunneler::runClient() {
-    INFO("[DatagramTunneler][CLIENT-MODE] is now running...");
     // Connect to TCP server
     sockaddr_in server_addr;
     //TODO: set an tcp interface ip!
@@ -75,6 +74,8 @@ void DatagramTunneler::runClient() {
     if(setsockopt(udp_socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &udp_group, sizeof(udp_group)) < 0) {
         DEATH("Could not join multicast group %s:%u. Error %d", cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_, errno);
     }
+    INFO("[DatagramTunneler][CLIENT-MODE] connected to TCP remote %s:%u and listening to multicast %s:%u", 
+    cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
 
     Datagram dgram;
     inet_pton(AF_INET, cfg_.udp_dst_ip_.c_str(), &dgram.udp_dst_ip_);
