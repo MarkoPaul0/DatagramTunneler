@@ -1,6 +1,7 @@
 #include "DatagramTunneler.h"
 #include <getopt.h>
 #include <string>
+#include "log.h"
 
 //Parses the command line arguments to populate the provided DatagramTunneler::Config
 static void getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Config* const cfg) {

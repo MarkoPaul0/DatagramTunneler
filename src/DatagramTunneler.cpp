@@ -7,11 +7,27 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-static const int NO_FLAGS = 0;
 #ifndef MSG_NOSIGNAL
 //MSG_NOSIGNAL is posix but somehow not portable (undefined on OSX) 
-#define MSG_NOSIGNAL NO_FLAGS
+#define MSG_NOSIGNAL 0 // 0 = no flags
 #endif
+
+static const int NO_FLAGS = 0;
+static const size_t MAX_DGRAM_LEN = 1472; //jumbo frames are not supported
+
+#pragma pack(push,1)
+struct Datagram { //Structure used to tunnel the datagrams
+    uint32_t udp_dst_ip_;               // UDP destination address 
+    uint16_t udp_dst_port_;             // UDP destination port
+    uint16_t datalen_;                  // Datagram length
+    char     databuf_[MAX_DGRAM_LEN];   // Datagram buffer
+    
+    size_t size() const { //TODO: move to cpp
+        return static_cast<size_t>(datalen_ + 8);
+    }
+};
+static_assert(sizeof(Datagram) == 1480, "The Datagram struct should be 1480 bytes long!");
+#pragma pack(pop)
 
 DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
     if (cfg.is_client_) {
