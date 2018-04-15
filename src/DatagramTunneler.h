@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <cstdint>
 #include <assert.h>
+#include <netinet/in.h>
+#include <string>
 
 #define INFO(_format_,...)  printf("INFO      "); printf((_format_),##__VA_ARGS__); printf("\n");
 #define WARN(_format_,...)  printf("WARNING   "); printf((_format_),##__VA_ARGS__); printf("\n");
@@ -57,12 +59,19 @@ static const size_t MAX_DGRAM_LEN = 1472; //jumbo frames are not supported
     static_assert(sizeof(Datagram) == 1480, "The Datagram struct should be 1480 bytes long!");
 #pragma pack(pop)
 
+    //Client side methods
+    void setupClient(const ClientCfg& cfg);
+    void runClient();
     void getNextDatagram(Datagram* const dgram);
     void sendDatagramToServer(const Datagram* dgram);
-    void runClient();
+
+    //Server side methods
+    void setupServer(const ServerCfg& cfg);
     void runServer();
 
-    Config  cfg_;
-    int     udp_socket_;
-    int     tcp_socket_;
+    //Config  cfg_;
+    bool            is_client_;
+    int             udp_socket_;    // Used by the client to read udp data or by the server to publish data
+    int             tcp_socket_;    // used by the client to connect to the server, by the server to listen for client connections
+    sockaddr_in     pub_group_;     // publisher group, used by server to publish data
 };
