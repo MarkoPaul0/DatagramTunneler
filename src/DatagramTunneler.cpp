@@ -77,7 +77,8 @@ void DatagramTunneler::runClient() {
     }
 
     Datagram dgram;
-    //TODO: pupulate UDP IP and port into datagram once and for all
+    inet_pton(AF_INET, cfg_.udp_dst_ip_.c_str(), &dgram.udp_dst_ip_);
+    dgram.udp_dst_port_ = cfg_.udp_dst_port_;
     int len_read = 0;
     while (true) {
         if((len_read = read(udp_socket_, dgram.databuf_, MAX_DGRAM_LEN)) < 0) {
@@ -146,10 +147,8 @@ void DatagramTunneler::runServer() {
         pub_group.sin_family = AF_INET; 
         pub_group.sin_port = htons(cfg_.udp_dst_port_);
         pub_group.sin_addr.s_addr = inet_addr(cfg_.udp_dst_ip_.c_str());
-    } else {
-        DEATH("Publishing the data on the same group the client has joined is NOT supported yet!");
-    }   
-    //char data[MAX_DGRAM_LEN];
+    }
+
     Datagram dgram;
     while(true) {
         int len_read = recv(new_fd, &dgram, MAX_DGRAM_LEN, NO_FLAGS);
@@ -160,14 +159,27 @@ void DatagramTunneler::runServer() {
             //TODO: temporary, review this
             return;
         }
-        if (cfg_.use_clt_grp_) {
+        
+        if (cfg_.use_clt_grp_) { //potential for feedbackloop if both client and server are in the same subnet
+//however if that were the case, there would be no need to forward the datagrams
             memset(&pub_group, 0, sizeof(pub_group));
-            //TODO: use the udp group sent in the packet to publish the data
+            pub_group.sin_family = AF_INET; 
+            pub_group.sin_port = htons(dgram.udp_dst_port_);
+            pub_group.sin_addr.s_addr = dgram.udp_dst_ip_;
         }
     
         if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, NO_FLAGS, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
             DEATH("Unable to publish multicast data, sendto() error %d!", errno);
         }
-        INFO("Published a %u byte datagram tunneled by client.", dgram.datalen_);
+
+        //Getting group on which the datagram was published on client side
+        char clt_grp_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &dgram.udp_dst_ip_, clt_grp_ip, INET_ADDRSTRLEN);
+
+        //Getting group on which the server is publishing the forwared datagrams
+        char pub_grp_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &pub_group.sin_addr, pub_grp_ip, INET_ADDRSTRLEN);
+        INFO("Published to %s:%u a %u byte datagram tunneled by client. Client side group was %s:%u",
+        pub_grp_ip, ntohs(pub_group.sin_port), dgram.datalen_, clt_grp_ip, dgram.udp_dst_port_);
     }
 }

@@ -19,6 +19,7 @@ int main(int argc, char* argv[]) {
         cfg.is_client_ = false;
         cfg.udp_dst_ip_ = "228.14.28.52";
         cfg.udp_dst_port_ = 1234;
+//        cfg.use_clt_grp_ = true;
         DatagramTunneler tunneler2(cfg);
         tunneler2.run();
         INFO("Exiting main");
