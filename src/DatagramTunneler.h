@@ -24,7 +24,7 @@ public:
         std::string     tcp_srv_ip_;
 
         // Sevver specific
-        bool            use_clt_multicast_; //if true, the server will publish multicast data on the same group the client is listening
+        bool            use_clt_grp_; //if true, the server will publish multicast data on the same group the client is listening
     };
 
     //Constructor
@@ -62,5 +62,4 @@ static const size_t MAX_DGRAM_LEN = 1472; //jumbo frames are not supported
     bool            is_client_;
     int             udp_socket_;    // Used by the client to read udp data or by the server to publish data
     int             tcp_socket_;    // used by the client to connect to the server, by the server to listen for client connections
-    sockaddr_in     pub_group_;     // publisher group, used by server to publish data
 };

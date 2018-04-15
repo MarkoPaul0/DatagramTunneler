@@ -13,7 +13,6 @@ static const int NO_FLAGS = 0;
 
 DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg), is_client_(cfg.is_client_) {
     INFO("DatagramTunneler construction");
-    memset(&pub_group_, 0, sizeof(pub_group_));
     if (cfg.is_client_) {
         INFO("CLIENT SETUP!");
         setupClient(cfg);
@@ -130,12 +129,6 @@ void DatagramTunneler::setupServer(const Config& cfg) {
         DEATH("Could not set UDP publisher interface to %s! Error %d", cfg_.udp_iface_ip_.c_str(), errno);
     }
     
-    //sockaddr_in pub_group_;
-    pub_group_.sin_family = AF_INET; 
-    //port 1234
-    pub_group_.sin_port = htons(1234);
-    //"228.14.28.52"
-    pub_group_.sin_addr.s_addr = inet_addr("228.14.28.52" );
 
     //TCP SOCKET SETUP
     tcp_socket_ = socket(AF_INET , SOCK_STREAM , NO_FLAGS);
@@ -155,29 +148,39 @@ void DatagramTunneler::setupServer(const Config& cfg) {
 void DatagramTunneler::runServer() {
     INFO("DatagramTunneler is now running as a server...");
     INFO("Listening on port %u..", cfg_.tcp_srv_port_);
-    listen(tcp_socket_, 1);
+    listen(tcp_socket_, 1); //only accepts one connection
+    sockaddr remote;
+    socklen_t sosize  = sizeof(remote);
+    int new_fd = accept(tcp_socket_, &remote, &sosize);
+    if (new_fd < 0) {
+        DEATH("Unable to accept incoming TCP connection, accept() error %d!", errno);
+    }
+    INFO("Now receiving data from the connection");
+    sockaddr_in pub_group;
+    if (!cfg_.use_clt_grp_) { //if not reusing the multicast joined by the client then using the one set in the configuration to publish data
+        memset(&pub_group, 0, sizeof(pub_group));
+        pub_group.sin_family = AF_INET; 
+        pub_group.sin_port = htons(cfg_.udp_dst_port_);
+        pub_group.sin_addr.s_addr = inet_addr(cfg_.udp_dst_ip_.c_str());
+    } else {
+        DEATH("Publishing the data on the same group the client has joined is NOT supported yet!");
+    }   
+    char data[MAX_DGRAM_LEN];
     while(true) {
-        sockaddr remote;
-        socklen_t sosize  = sizeof(remote);
-        int new_fd = accept(tcp_socket_, &remote, &sosize);
-        if (new_fd < 0) {
-            DEATH("Unable to accept incoming TCP connection, accept() error %d!", errno);
+        int len_read = recv(new_fd, data, MAX_DGRAM_LEN, NO_FLAGS);
+        if (len_read < 0) {
+            DEATH("Unable to read data from TCP socket, recv() error %d!", errno);
         }
-        INFO("Now receiving data from the connection");
-        char data[MAX_DGRAM_LEN];
-        while(true) {
-            int len_read = recv(new_fd, data, MAX_DGRAM_LEN, NO_FLAGS);
-            if (len_read < 0) {
-                DEATH("Unable to read data from TCP socket, recv() error %d!", errno);
-            }
-            INFO("Received %d bytes", len_read);
-        
-            Datagram dgram;
-            if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, NO_FLAGS, reinterpret_cast<struct sockaddr*>(&pub_group_), sizeof(pub_group_)) < 0) {
-                DEATH("Unable to publish multicast data, sendto() error %d!", errno);
-            }
-            INFO("Sent data to multicast group!");
+        INFO("Received %d bytes", len_read);
+        if (cfg_.use_clt_grp_) {
+            //TODO: use the udp group sent in the packet to publish the data
         }
+    
+        Datagram dgram;
+        if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, NO_FLAGS, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
+            DEATH("Unable to publish multicast data, sendto() error %d!", errno);
+        }
+        INFO("Sent data to multicast group!");
     }
 }
 
