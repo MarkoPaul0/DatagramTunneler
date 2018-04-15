@@ -9,23 +9,19 @@
 #include <arpa/inet.h>
 static const int NO_FLAGS = 0;
 
-DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg), is_client_(cfg.is_client_) {
+DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
     if (cfg.is_client_) {
-        INFO("CLIENT SETUP!");
         setupClient(cfg);
-
-    } else { //SERVER SETUP
-        INFO("SERVER SETUP!");
+    } else { 
         setupServer(cfg);
     }
 }
 
 DatagramTunneler::~DatagramTunneler() {
-    INFO("DatagramTunneler destruction");
 }
 
 void DatagramTunneler::run() {
-    if (is_client_) {
+    if (cfg_.is_client_) {
         runClient();
     } else {
         runServer();
@@ -175,10 +171,3 @@ void DatagramTunneler::runServer() {
         INFO("Published a %u byte datagram tunneled by client.", dgram.datalen_);
     }
 }
-
-
-
-
-
-
-

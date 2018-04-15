@@ -56,7 +56,6 @@ static const size_t MAX_DGRAM_LEN = 1472; //jumbo frames are not supported
     void runServer();
 
     Config          cfg_;
-    bool            is_client_;
     int             udp_socket_;    // Used by the client to read udp data or by the server to publish data
     int             tcp_socket_;    // used by the client to connect to the server, by the server to listen for client connections
 };
