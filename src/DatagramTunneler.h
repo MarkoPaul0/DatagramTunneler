@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <cstdint>
 #include <assert.h>
-#include <netinet/in.h>
 #include <string>
 
 #define INFO(_format_,...)  printf("INFO      "); printf((_format_),##__VA_ARGS__); printf("\n");

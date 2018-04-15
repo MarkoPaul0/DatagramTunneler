@@ -1,18 +1,15 @@
 #include "DatagramTunneler.h"
 #include <sys/socket.h>
-//#include <netinet/in.h>
 #include <cstring>
 #include <cerrno>
 #include <unistd.h>
 #include <cstdint>
-
 #include <sys/types.h>
-//for inet_addr();
+#include <netinet/in.h>
 #include <arpa/inet.h>
 static const int NO_FLAGS = 0;
 
 DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg), is_client_(cfg.is_client_) {
-    INFO("DatagramTunneler construction");
     if (cfg.is_client_) {
         INFO("CLIENT SETUP!");
         setupClient(cfg);
@@ -40,43 +37,42 @@ void DatagramTunneler::run() {
 // CLIENT SIDE METHODS
 //------------------------------------------------------------------------------------------------
 void DatagramTunneler::setupClient(const Config& cfg) {
+    // Creating UDP socket
     udp_socket_ = socket(AF_INET, SOCK_DGRAM, NO_FLAGS);
     if (udp_socket_ < 0) {
         DEATH("Could not create UDP socket!");
     }
 
+    // Binding UDP socket to configured port
     sockaddr_in bind_addr;
     memset(&bind_addr, 0, sizeof(bind_addr));
     bind_addr.sin_family = AF_INET;
-    //port 7437
     bind_addr.sin_port = htons(cfg.udp_dst_port_);
     bind_addr.sin_addr.s_addr = INADDR_ANY;
     if(bind(udp_socket_, reinterpret_cast<sockaddr*>(&bind_addr), sizeof(bind_addr)) < 0) {
         DEATH("Could not bind UDP socket to port %u!", cfg.udp_dst_port_);
     }
 
-    //TCP SOCKET SETUP
+    // Creating TCP socket
     tcp_socket_ = socket(AF_INET , SOCK_STREAM , NO_FLAGS);
     if (tcp_socket_ < 0) {
         DEATH("Could not create TCP socket!");
     }
-
-    sockaddr_in server_addr;
-    //TODO: set an tcp interface ip!
-    //inet_pton(AF_INET, "192.0.2.33", &(sa.sin_addr));
-    //address 127.0.0.1 //TODO: allow to use interface
-    server_addr.sin_addr.s_addr = inet_addr(cfg.tcp_srv_ip_.c_str());
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(cfg.tcp_srv_port_);
-    //TODO: move the connection to run the function maybe?
-    if (connect(tcp_socket_, reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)) < 0) {
-        DEATH("Unable to connect to server %s:%u. Error %d!", cfg.tcp_srv_ip_.c_str(), cfg.tcp_srv_port_, errno);
-    }
 }
 
 void DatagramTunneler::runClient() {
-    INFO("DatagramTunneler is now running as a client...");
+    INFO("[DatagramTunneler][CLIENT-MODE] is now running...");
+    // Connect to TCP server
+    sockaddr_in server_addr;
+    //TODO: set an tcp interface ip!
+    server_addr.sin_addr.s_addr = inet_addr(cfg_.tcp_srv_ip_.c_str());
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(cfg_.tcp_srv_port_);
+    if (connect(tcp_socket_, reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)) < 0) {
+        DEATH("Unable to connect to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, errno);
+    }
 
+    // Join multicast group
     ip_mreq udp_group;
     udp_group.imr_multiaddr.s_addr = inet_addr(cfg_.udp_dst_ip_.c_str());
     udp_group.imr_interface.s_addr = inet_addr(cfg_.udp_iface_ip_.c_str());
@@ -88,9 +84,13 @@ void DatagramTunneler::runClient() {
     //TODO: pupulate UDP IP and port into datagram once and for all
     while (true) {
         getNextDatagram(&dgram);
-        sendDatagramToServer(&dgram);
+        if (dgram.datalen_ > 0) {
+            sendDatagramToServer(&dgram);
+            INFO("Tunneled a %u byte datagram to server.", dgram.datalen_);
+        }
     }
 }
+
 void DatagramTunneler::getNextDatagram(Datagram* const dgram) {
     int len_read = 0;
     if((len_read = read(udp_socket_, dgram->databuf_, MAX_DGRAM_LEN)) < 0) {
@@ -98,15 +98,12 @@ void DatagramTunneler::getNextDatagram(Datagram* const dgram) {
         DEATH("Unable to read data from UDP socket %d", errno);
     }
     assert(len_read <= UINT16_MAX);
-    //TODO: handle case where len_read = 0
-    INFO("Read udp packet of %d bytes", len_read);
     dgram->datalen_ = static_cast<uint16_t>(len_read);
 }
 
 void DatagramTunneler::sendDatagramToServer(const Datagram* dgram) {
-    INFO("Sending datagram to server via TCP");
     if(send(tcp_socket_, dgram, dgram->size(), NO_FLAGS) < 0) { //TODO: review no flags
-        DEATH("Unable to send data to server!");
+        DEATH("Unable to send data to server! Error %d", errno);
     }
 }
 //------------------------------------------------------------------------------------------------
@@ -116,38 +113,37 @@ void DatagramTunneler::sendDatagramToServer(const Datagram* dgram) {
 // SERVER SIDE METHODS
 //------------------------------------------------------------------------------------------------
 void DatagramTunneler::setupServer(const Config& cfg) {
-    // UDP SOCKET SETUP
+    // Creating UDP socket
     udp_socket_ = socket(AF_INET, SOCK_DGRAM, NO_FLAGS);
     if (udp_socket_ < 0) {
         DEATH("Could not create UDP socket! Error %d", errno);
     }
     
+    // Setting up the UDP publishing interface
     in_addr iface;
-    //interface address 192.168.0.104
     iface.s_addr = inet_addr(cfg_.udp_iface_ip_.c_str());
     if(setsockopt(udp_socket_, IPPROTO_IP, IP_MULTICAST_IF, &iface, sizeof(iface)) < 0) {
         DEATH("Could not set UDP publisher interface to %s! Error %d", cfg_.udp_iface_ip_.c_str(), errno);
     }
     
-
-    //TCP SOCKET SETUP
+    // Creating TCP socket
     tcp_socket_ = socket(AF_INET , SOCK_STREAM , NO_FLAGS);
     if (tcp_socket_ < 0) {
         DEATH("Could not create TCP socket! Error %d", errno);
     }
 
+    // Binding the TCP socket
     sockaddr_in tcp_iface;
     tcp_iface.sin_family = AF_INET;
     tcp_iface.sin_port = htons (cfg_.tcp_srv_port_);
-    tcp_iface.sin_addr.s_addr = htonl (INADDR_ANY); //TODO: review that 
+    tcp_iface.sin_addr.s_addr = htonl(INADDR_ANY); //TODO: review that 
     if(bind(tcp_socket_, reinterpret_cast<sockaddr*>(&tcp_iface), sizeof(tcp_iface)) < 0) {
         DEATH("Could not bind TCP socket to port %u! Error %d", cfg.tcp_srv_port_, errno);
     }
 }
 
 void DatagramTunneler::runServer() {
-    INFO("DatagramTunneler is now running as a server...");
-    INFO("Listening on port %u..", cfg_.tcp_srv_port_);
+    INFO("[DatagramTunneler][SERVER MODE] listening for client connection on port %u...", cfg_.tcp_srv_port_);
     listen(tcp_socket_, 1); //only accepts one connection
     sockaddr remote;
     socklen_t sosize  = sizeof(remote);
@@ -155,7 +151,7 @@ void DatagramTunneler::runServer() {
     if (new_fd < 0) {
         DEATH("Unable to accept incoming TCP connection, accept() error %d!", errno);
     }
-    INFO("Now receiving data from the connection");
+    INFO("Accepted incoming connection from a remote host. Waiting for forwarded datagrams...");
     sockaddr_in pub_group;
     if (!cfg_.use_clt_grp_) { //if not reusing the multicast joined by the client then using the one set in the configuration to publish data
         memset(&pub_group, 0, sizeof(pub_group));
@@ -165,22 +161,26 @@ void DatagramTunneler::runServer() {
     } else {
         DEATH("Publishing the data on the same group the client has joined is NOT supported yet!");
     }   
-    char data[MAX_DGRAM_LEN];
+    //char data[MAX_DGRAM_LEN];
+    Datagram dgram;
     while(true) {
-        int len_read = recv(new_fd, data, MAX_DGRAM_LEN, NO_FLAGS);
+        int len_read = recv(new_fd, &dgram, MAX_DGRAM_LEN, NO_FLAGS);
         if (len_read < 0) {
             DEATH("Unable to read data from TCP socket, recv() error %d!", errno);
         }
-        INFO("Received %d bytes", len_read);
+        if (len_read == 0) {
+            //TODO: temporary, review this
+            return;
+        }
         if (cfg_.use_clt_grp_) {
+            memset(&pub_group, 0, sizeof(pub_group));
             //TODO: use the udp group sent in the packet to publish the data
         }
     
-        Datagram dgram;
         if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, NO_FLAGS, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
             DEATH("Unable to publish multicast data, sendto() error %d!", errno);
         }
-        INFO("Sent data to multicast group!");
+        INFO("Published a %u byte datagram tunneled by client.", dgram.datalen_);
     }
 }
 
