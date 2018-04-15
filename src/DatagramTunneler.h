@@ -50,8 +50,6 @@ static const size_t MAX_DGRAM_LEN = 1472; //jumbo frames are not supported
     //Client side methods
     void setupClient(const Config& cfg);
     void runClient();
-    void getNextDatagram(Datagram* const dgram);
-    void sendDatagramToServer(const Datagram* dgram);
 
     //Server side methods
     void setupServer(const Config& cfg);

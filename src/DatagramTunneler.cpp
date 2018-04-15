@@ -82,28 +82,20 @@ void DatagramTunneler::runClient() {
 
     Datagram dgram;
     //TODO: pupulate UDP IP and port into datagram once and for all
+    int len_read = 0;
     while (true) {
-        getNextDatagram(&dgram);
+        if((len_read = read(udp_socket_, dgram.databuf_, MAX_DGRAM_LEN)) < 0) {
+            //TODO: handle errors and edge cases such as jumbo frames
+            DEATH("Unable to read data from UDP socket %d", errno);
+        }
+        assert(len_read <= UINT16_MAX);
+        dgram.datalen_ = static_cast<uint16_t>(len_read);
         if (dgram.datalen_ > 0) {
-            sendDatagramToServer(&dgram);
+            if(send(tcp_socket_, &dgram, dgram.size(), NO_FLAGS) < 0) { //TODO: review no flags
+                DEATH("Unable to send data to server! Error %d", errno);
+            }
             INFO("Tunneled a %u byte datagram to server.", dgram.datalen_);
         }
-    }
-}
-
-void DatagramTunneler::getNextDatagram(Datagram* const dgram) {
-    int len_read = 0;
-    if((len_read = read(udp_socket_, dgram->databuf_, MAX_DGRAM_LEN)) < 0) {
-        //TODO: handle errors and edge cases such as jumbo frames
-        DEATH("Unable to read data from UDP socket %d", errno);
-    }
-    assert(len_read <= UINT16_MAX);
-    dgram->datalen_ = static_cast<uint16_t>(len_read);
-}
-
-void DatagramTunneler::sendDatagramToServer(const Datagram* dgram) {
-    if(send(tcp_socket_, dgram, dgram->size(), NO_FLAGS) < 0) { //TODO: review no flags
-        DEATH("Unable to send data to server! Error %d", errno);
     }
 }
 //------------------------------------------------------------------------------------------------
