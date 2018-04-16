@@ -6,7 +6,52 @@
 ![GitHub (pre-)release](https://img.shields.io/github/release/MarkoPaul0/WireBait/all.svg?style=flat-square)
 ![GitHub (pre-)release](https://img.shields.io/github/commits-since/MarkoPaul0/WireBait/latest.svg?style=flat-square)-->
 
-Simple client/server program forwarding UDP datagrams through a TCP connection. The client joins a multicast group and forwards the received datagrams to the server, which multicasts them on its subnet.
+Simple cross-platform client/server program forwarding UDP datagrams through a TCP connection (aka tunnel). The client joins a multicast group and forwards the received datagrams to the server, which in turns multicasts them on its own subnet.
 
 * Designed with simplicity in mind, not low latency.
-* Take "*cross-platform*" with a grain of salt. Only tested on OSX and Ubuntu 16.04 so far. (obviously not Windows compatible)
+* Take *cross-platform* with a grain of salt. Only tested on OSX 10.13.3 and Ubuntu 16.04 so far. (obviously not Windows compatible)
+
+## How does it work?
+The purpose of the DatagramTunneler is to transfer multicast data from one subnet A to another subnet B where that multicast channel is not available. To achieve this, the DatagramTunneler is split into 2 sides: a client side and a server side, as shown on the diagram below:
+![Datagram Tunneler](doc/datagramtunneler_diagram.png)
+
+### The Client Side
+The client side should run in the subnet where the multicast channel is joinable. Once started it will do the following:
+* connect to the DatagramListener Server (TCP)
+* join the multicast channel (UDP)
+* forward all the received datagrams to the server using the established TCP connection. Datagrams are transmitted throught TCP using the [Datagram Tunneler Encapsulation Protocol (or DTEP)](#dtep).
+
+### The Server Side
+The server side should run in the subnet where the multicast is not available. Once started it will do the following:
+* listen for a client connection (note that only one connection is accepted throughout the lifetime of the Server/Client instances. Once the tunnel is disconnected, both ends exit.
+* once a connection with a client is established, it will publish all the datagrams sent by the client to a multicast channel. That channel can be anything specified when launching the server, or if not specified, it will used the same multicast channel encoded with the datagram it received (c.f. [DTEP](#dtep)).
+
+
+<a name="dtep"/>
+
+### The Datagram Tunneler Encapsulation Protocol (DTEP)
+The Datagram Tunneler Protocol or DTEP is a simple binary protocol, entirely defined by the diagram below:
+![Datagram Tunneler Encapsulation Protocol](doc/datagramtunneler_proto.png)
+
+Although this diagram should be self explanatory, here is a break down of all the fields:
+* **Datagram Length**: number of bytes of the encapsulated datagram (the DTEP header length is NOT included)
+* **UDP Channel Address**: destination address of the multicast group which the client joined to received that datagram
+* **UDP Channel Port**: destination port of the multicast group which the client joined to received that datagram
+* **Encapsulated UDP Datagram**: actual datagram received by the client from the multicast channel
+
+## How to use it
+In order to use the DatagramTunneler, you need to start the server side first and then the client side. If you don't, the client will just fail to connect to the server and exit right away.
+Here is the synopsys:
+
+(coming soon)
+
+### Example
+server side:
+```
+./bin/datagramtunneler --server -i 192.168.0.104 -u 228.14.28.52 -p 1234 -l 28052
+```
+
+client side:
+```
+./bin/datagramtunneler --client -i 192.168.0.105 -u 228.1.2.3 -p 7437 -t 192.168.0.104 -l 28052
+```
