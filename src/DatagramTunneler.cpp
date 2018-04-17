@@ -108,17 +108,22 @@ void DatagramTunneler::runClient() {
     INFO("[DatagramTunneler][CLIENT-MODE] connected to TCP remote %s:%u and listening to multicast %s:%u", 
     cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
 
+    // Setting up the DTEP header in the Datagram struct
     Datagram dgram;
     inet_pton(AF_INET, cfg_.udp_dst_ip_.c_str(), &dgram.udp_dst_ip_);
     dgram.udp_dst_port_ = cfg_.udp_dst_port_;
     int len_read = 0;
+    // Running loop
     while (true) {
+        // Read datagram from udp socket
         if((len_read = read(udp_socket_, dgram.databuf_, MAX_DGRAM_LEN)) < 0) {
             //TODO: handle errors and edge cases such as jumbo frames
             DEATH("Unable to read data from UDP socket %d", errno);
         }
         assert(len_read <= UINT16_MAX);
         dgram.datalen_ = static_cast<uint16_t>(len_read);
+
+        // Send the datagram to the server over the TCP connection
         if (dgram.datalen_ > 0) {
             if(send(tcp_socket_, &dgram, dgram.size(), NO_FLAGS) < 0) { 
                 DEATH("Unable to send data to server! Error %d", errno);
@@ -166,7 +171,10 @@ void DatagramTunneler::setupServer(const Config& cfg) {
 
 void DatagramTunneler::runServer() {
     INFO("[DatagramTunneler][SERVER MODE] listening for client connection on port %u...", cfg_.tcp_srv_port_);
-    listen(tcp_socket_, 1); //only accepts one connection
+    //Listening for client connection and accepting connection
+    if (listen(tcp_socket_, 1) < 0) {
+        DEATH("Unable to listen on TCP port %u, error %d!", cfg_.tcp_srv_port_, errno);
+    }
     sockaddr remote;
     socklen_t sosize  = sizeof(remote);
     int new_fd = accept(tcp_socket_, &remote, &sosize);
@@ -183,16 +191,23 @@ void DatagramTunneler::runServer() {
     }
 
     Datagram dgram;
+    char* p = reinterpret_cast<char*>(&dgram); //a write pointer
+    int data_len = 0;
     while(true) {
-        int len_read = recv(new_fd, &dgram, MAX_DGRAM_LEN, NO_FLAGS);
+        assert(data_len >= 0);
+        // Reading data sent from client
+        int len_read = recv(new_fd, p, MAX_DGRAM_LEN - data_len, NO_FLAGS);
         if (len_read < 0) {
             DEATH("Unable to read data from TCP socket, recv() error %d!", errno);
         }
-        if (len_read == 0) {
-            //TODO: temporary, review this
-            return;
+        p += len_read;
+        data_len = p - reinterpret_cast<char*>(&dgram);
+        if (data_len < 2 || data_len < dgram.datalen_) {
+            continue; //we need the whole DTEP packet before publishing it
         }
-        
+        assert(data_len == dgram.datalen_ + 8); //we only read enough byte to at most get the whole DTEP (+8 for DTEP header)
+        p = reinterpret_cast<char*>(&dgram);
+
         if (cfg_.use_clt_grp_) { //potential for feedbackloop if both client and server are in the same subnet
 //however if that were the case, there would be no need to forward the datagrams
             memset(&pub_group, 0, sizeof(pub_group));
@@ -201,6 +216,7 @@ void DatagramTunneler::runServer() {
             pub_group.sin_addr.s_addr = dgram.udp_dst_ip_;
         }
     
+        // Multicasting the datagrams received from the client
         if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, MSG_NOSIGNAL, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
             DEATH("Unable to publish multicast data, sendto() error %d!", errno);
         }
