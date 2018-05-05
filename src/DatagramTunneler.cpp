@@ -13,7 +13,7 @@
 #endif
 
 static const int        NO_FLAGS = 0;
-static const size_t     MAX_DGRAM_LEN = 1472;       //jumbo frames are not supported
+static const int        MAX_DGRAM_LEN = 1472;       //jumbo frames are not supported
 static const int        HEARTBEAT_PERIOD_SEC = 5;   //client will send tunnel at least 1 packet every 5 seconds wether or not a datagram is received
 
 enum TunnelPktType : uint8_t {
@@ -39,6 +39,24 @@ struct TunnelPacket { //Structure used to tunnel the datagrams
 };
 static_assert(sizeof(TunnelPacket) == 1481, "The TunnelPacket struct should be 1481 bytes long!");
 #pragma pack(pop)
+
+//This method is local to this cpp file, and simply does what its name suggests. Returns false if it fails and sets errno
+static bool sendTCPData(int tcp_socket, const void* data, size_t datalen, int flags) {
+    assert(datalen > 0); //I consider this a mistake in the code
+    int len_to_send = datalen;
+    const char* p = reinterpret_cast<const char*>(data);
+    do {
+        int len_sent = 0;
+        if((len_sent = send(tcp_socket, p, len_to_send, flags)) < 0) { 
+            return false;
+        }
+        assert(len_sent > 0);
+        len_to_send -= len_sent;
+        p += len_sent;
+        assert(len_to_send >= 0);
+    } while (len_to_send > 0);
+    return true;
+}
 
 DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
     if (cfg.is_client_) {
@@ -70,6 +88,7 @@ void DatagramTunneler::setupClient(const Config& cfg) {
         DEATH("Could not create UDP socket! Error %d", errno);
     }
 
+    // Setting timeout on UDP socket so as to send data to server at least every HEARTBEAT_PERIOD_SEC seconds
     struct timeval tv {HEARTBEAT_PERIOD_SEC, 0};
     if (setsockopt(udp_socket_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
         DEATH("Could not set receive timeout on UDP socket! Error %d", errno);
@@ -106,7 +125,7 @@ void DatagramTunneler::setupClient(const Config& cfg) {
 void DatagramTunneler::runClient() {
     // Connect to TCP server
     sockaddr_in server_addr;
-    //TODO: set an tcp interface ip!
+    //TODO: set a tcp interface ip!
     server_addr.sin_addr.s_addr = inet_addr(cfg_.tcp_srv_ip_.c_str());
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(cfg_.tcp_srv_port_);
@@ -130,11 +149,10 @@ void DatagramTunneler::runClient() {
     inet_pton(AF_INET, cfg_.udp_dst_ip_.c_str(), &tunnel_pkt.udp_dst_ip_);
     tunnel_pkt.udp_dst_port_ = cfg_.udp_dst_port_;
     int len_read = 0;
-    int len_sent = 0;
     // Running loop
     while (true) {
         // Read datagram from udp socket
-        if((len_read = read(udp_socket_, tunnel_pkt.databuf_, MAX_DGRAM_LEN)) < 0) {
+        if((len_read = recv(udp_socket_, tunnel_pkt.databuf_, MAX_DGRAM_LEN, MSG_TRUNC)) < 0) {
             //TODO: handle errors and edge cases such as jumbo frames
             if (errno != EAGAIN) {
                 DEATH("Unable to read data from UDP socket %d", errno);
@@ -142,21 +160,19 @@ void DatagramTunneler::runClient() {
             tunnel_pkt.type_ = TunnelPktType::HEARTBEAT;
             INFO("Sending a heartbeat to server.");
         } else {
-            if (len_read == 0) {
-                DEATH("Empty datagram!")
+            assert(len_read <= MAX_DGRAM_LEN);
+            if (len_read > MAX_DGRAM_LEN) { //this is possible because we are using MSG_TRUNC flag
+                WARN("Discarding jumbo datagram of %d bytes!", len_read);
+                continue;
             }
             tunnel_pkt.type_ = TunnelPktType::DATAGRAM;
             INFO("Tunneling a %d byte datagram to server.", len_read);
+            tunnel_pkt.datalen_ = static_cast<uint16_t>(len_read);
         }
-        assert(len_read <= UINT16_MAX);
-        tunnel_pkt.datalen_ = static_cast<uint16_t>(len_read);
 
-        // Send the datagram to the server over the TCP connection
-        if((len_sent = send(tcp_socket_, &tunnel_pkt, tunnel_pkt.size(), NO_FLAGS)) < 0) { 
+        // Send the encapsulated datagram to the server over the TCP connection
+        if(!sendTCPData(tcp_socket_, &tunnel_pkt, tunnel_pkt.size(), NO_FLAGS)) {
             DEATH("Unable to send data to server! Error %d", errno);
-        }
-        if (len_sent < tunnel_pkt.size()) {
-            DEATH("Unable to tunnel the whole datagram in 1 call."); //TODO: handler this scenario instead of dying
         }
     }
 }
@@ -226,13 +242,11 @@ void DatagramTunneler::runServer() {
 
     TunnelPacket tunnel_pkt;
     char* p = reinterpret_cast<char*>(&tunnel_pkt); //a write pointer
-    int data_len = 0;
     int len_read = 0;
     int len_to_read = 1;
     while(true) {
-        assert(data_len >= 0);
+        assert(len_to_read > 0);
         // Reading data sent from client
-        //if ((len_read = recv(new_fd, p, MAX_DGRAM_LEN - data_len, NO_FLAGS)) < 0) {
         if ((len_read = recv(new_fd, p, len_to_read, NO_FLAGS)) < 0) {
             if (errno == EAGAIN) {
                 INFO("Client has been silent for too long. Terminating");
@@ -250,7 +264,7 @@ void DatagramTunneler::runServer() {
             continue;
         }
         p += len_read;
-        data_len = p - reinterpret_cast<char*>(&tunnel_pkt);
+        size_t data_len = p - reinterpret_cast<char*>(&tunnel_pkt);
         if (data_len < 9) {
             len_to_read = 9 - data_len;
             continue; //read enough bytes to get the whole DTEP header
