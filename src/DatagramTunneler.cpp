@@ -22,7 +22,7 @@ struct Datagram { //Structure used to tunnel the datagrams
     uint16_t datalen_;                  // Datagram length
     char     databuf_[MAX_DGRAM_LEN];   // Datagram buffer
     
-    size_t size() const { //TODO: move to cpp
+    size_t size() const {
         return static_cast<size_t>(datalen_ + 8);
     }
 };
