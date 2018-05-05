@@ -12,21 +12,32 @@
 #define MSG_NOSIGNAL 0 // 0 = no flags
 #endif
 
-static const int NO_FLAGS = 0;
-static const size_t MAX_DGRAM_LEN = 1472; //jumbo frames are not supported
+static const int        NO_FLAGS = 0;
+static const size_t     MAX_DGRAM_LEN = 1472;       //jumbo frames are not supported
+static const int        HEARTBEAT_PERIOD_SEC = 5;   //client will send tunnel at least 1 packet every 5 seconds wether or not a datagram is received
+
+enum TunnelPktType : uint8_t {
+    HEARTBEAT = 0,
+    DATAGRAM = 1
+};
 
 #pragma pack(push,1)
-struct Datagram { //Structure used to tunnel the datagrams
-    uint32_t udp_dst_ip_;               // UDP destination address 
-    uint16_t udp_dst_port_;             // UDP destination port
-    uint16_t datalen_;                  // Datagram length
-    char     databuf_[MAX_DGRAM_LEN];   // Datagram buffer
+struct TunnelPacket { //Structure used to tunnel the datagrams
+    TunnelPktType   type_;                     // Packet type
+    uint32_t        udp_dst_ip_;               // UDP destination address 
+    uint16_t        udp_dst_port_;             // UDP destination port
+    uint16_t        datalen_;                  // Datagram length
+    char            databuf_[MAX_DGRAM_LEN];   // Datagram buffer
     
     size_t size() const {
-        return static_cast<size_t>(datalen_ + 8);
+        if (type_ == TunnelPktType::HEARTBEAT) {
+            return 1;
+        } else {
+            return static_cast<size_t>(datalen_ + 9);
+        }
     }
 };
-static_assert(sizeof(Datagram) == 1480, "The Datagram struct should be 1480 bytes long!");
+static_assert(sizeof(TunnelPacket) == 1481, "The TunnelPacket struct should be 1481 bytes long!");
 #pragma pack(pop)
 
 DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
@@ -56,7 +67,12 @@ void DatagramTunneler::setupClient(const Config& cfg) {
     // Creating UDP socket
     udp_socket_ = socket(AF_INET, SOCK_DGRAM, NO_FLAGS);
     if (udp_socket_ < 0) {
-        DEATH("Could not create UDP socket!");
+        DEATH("Could not create UDP socket! Error %d", errno);
+    }
+
+    struct timeval tv {HEARTBEAT_PERIOD_SEC, 0};
+    if (setsockopt(udp_socket_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        DEATH("Could not set receive timeout on UDP socket! Error %d", errno);
     }
 
     // Binding UDP socket to configured port
@@ -97,6 +113,8 @@ void DatagramTunneler::runClient() {
     if (connect(tcp_socket_, reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)) < 0) {
         DEATH("Unable to connect to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, errno);
     }
+    INFO("[DatagramTunneler][CLIENT-MODE] connected to TCP remote %s:%u and listening to multicast %s:%u", 
+    cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
 
     // Join multicast group
     ip_mreq udp_group;
@@ -105,31 +123,40 @@ void DatagramTunneler::runClient() {
     if(setsockopt(udp_socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &udp_group, sizeof(udp_group)) < 0) {
         DEATH("Could not join multicast group %s:%u. Error %d", cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_, errno);
     }
-    INFO("[DatagramTunneler][CLIENT-MODE] connected to TCP remote %s:%u and listening to multicast %s:%u", 
-    cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
+    INFO("Joined multicast group %s:%u.", cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
 
-    // Setting up the DTEP header in the Datagram struct
-    Datagram dgram;
-    inet_pton(AF_INET, cfg_.udp_dst_ip_.c_str(), &dgram.udp_dst_ip_);
-    dgram.udp_dst_port_ = cfg_.udp_dst_port_;
+    // Setting up the DTEP header in the TunnelPacket struct
+    TunnelPacket tunnel_pkt;
+    inet_pton(AF_INET, cfg_.udp_dst_ip_.c_str(), &tunnel_pkt.udp_dst_ip_);
+    tunnel_pkt.udp_dst_port_ = cfg_.udp_dst_port_;
     int len_read = 0;
+    int len_sent = 0;
     // Running loop
     while (true) {
         // Read datagram from udp socket
-        if((len_read = read(udp_socket_, dgram.databuf_, MAX_DGRAM_LEN)) < 0) {
+        if((len_read = read(udp_socket_, tunnel_pkt.databuf_, MAX_DGRAM_LEN)) < 0) {
             //TODO: handle errors and edge cases such as jumbo frames
-            DEATH("Unable to read data from UDP socket %d", errno);
+            if (errno != EAGAIN) {
+                DEATH("Unable to read data from UDP socket %d", errno);
+            }
+            tunnel_pkt.type_ = TunnelPktType::HEARTBEAT;
+            INFO("Sending a heartbeat to server.");
+        } else {
+            if (len_read == 0) {
+                DEATH("Empty datagram!")
+            }
+            tunnel_pkt.type_ = TunnelPktType::DATAGRAM;
+            INFO("Tunneling a %d byte datagram to server.", len_read);
         }
         assert(len_read <= UINT16_MAX);
-        dgram.datalen_ = static_cast<uint16_t>(len_read);
+        tunnel_pkt.datalen_ = static_cast<uint16_t>(len_read);
 
         // Send the datagram to the server over the TCP connection
-        if (dgram.datalen_ > 0) {
-            if(send(tcp_socket_, &dgram, dgram.size(), NO_FLAGS) < 0) { 
-                DEATH("Unable to send data to server! Error %d", errno);
-            }
-            //TODO: look at the number of bytes actually written to socket
-            INFO("Tunneled a %u byte datagram to server.", dgram.datalen_);
+        if((len_sent = send(tcp_socket_, &tunnel_pkt, tunnel_pkt.size(), NO_FLAGS)) < 0) { 
+            DEATH("Unable to send data to server! Error %d", errno);
+        }
+        if (len_sent < tunnel_pkt.size()) {
+            DEATH("Unable to tunnel the whole datagram in 1 call."); //TODO: handler this scenario instead of dying
         }
     }
 }
@@ -158,7 +185,7 @@ void DatagramTunneler::setupServer(const Config& cfg) {
     if (tcp_socket_ < 0) {
         DEATH("Could not create TCP socket! Error %d", errno);
     }
-
+    
     // Binding the TCP socket
     sockaddr_in tcp_iface;
     tcp_iface.sin_family = AF_INET;
@@ -182,6 +209,13 @@ void DatagramTunneler::runServer() {
         DEATH("Unable to accept incoming TCP connection, accept() error %d!", errno);
     }
     INFO("Accepted incoming connection from a remote host. Waiting for forwarded datagrams...");
+
+    // Setting up TCP timeout HEARTBEAT_PERIOD_SEC + 1 second
+    struct timeval tv {HEARTBEAT_PERIOD_SEC + 1, 0};
+    if (setsockopt(new_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        DEATH("Could not set receive timeout on TCP socket! Error %d", errno);
+    }
+
     sockaddr_in pub_group;
     if (!cfg_.use_clt_grp_) { //if not reusing the multicast joined by the client then using the one set in the configuration to publish data
         memset(&pub_group, 0, sizeof(pub_group));
@@ -190,45 +224,66 @@ void DatagramTunneler::runServer() {
         pub_group.sin_addr.s_addr = inet_addr(cfg_.udp_dst_ip_.c_str());
     }
 
-    Datagram dgram;
-    char* p = reinterpret_cast<char*>(&dgram); //a write pointer
+    TunnelPacket tunnel_pkt;
+    char* p = reinterpret_cast<char*>(&tunnel_pkt); //a write pointer
     int data_len = 0;
+    int len_read = 0;
+    int len_to_read = 1;
     while(true) {
         assert(data_len >= 0);
         // Reading data sent from client
-        int len_read = recv(new_fd, p, MAX_DGRAM_LEN - data_len, NO_FLAGS);
-        if (len_read < 0) {
-            DEATH("Unable to read data from TCP socket, recv() error %d!", errno);
+        //if ((len_read = recv(new_fd, p, MAX_DGRAM_LEN - data_len, NO_FLAGS)) < 0) {
+        if ((len_read = recv(new_fd, p, len_to_read, NO_FLAGS)) < 0) {
+            if (errno == EAGAIN) {
+                INFO("Client has been silent for too long. Terminating");
+                exit(0);
+            } else {
+                DEATH("Unable to read data from TCP socket, recv() error %d!", errno);
+            }
+        }
+        if (len_read == 0) {
+            INFO("Client terminated!"); //TODO: review conditions under which this could happen
+            exit(0);
+        }
+        if (tunnel_pkt.type_ == TunnelPktType::HEARTBEAT) {
+            INFO("Received heartbeat from client.");
+            continue;
         }
         p += len_read;
-        data_len = p - reinterpret_cast<char*>(&dgram);
-        if (data_len < 2 || data_len < dgram.datalen_) {
+        data_len = p - reinterpret_cast<char*>(&tunnel_pkt);
+        if (data_len < 9) {
+            len_to_read = 9 - data_len;
+            continue; //read enough bytes to get the whole DTEP header
+        }
+        if (data_len < tunnel_pkt.size()) {
+            len_to_read = tunnel_pkt.size() - data_len;
             continue; //we need the whole DTEP packet before publishing it
         }
-        assert(data_len == dgram.datalen_ + 8); //we only read enough byte to at most get the whole DTEP (+8 for DTEP header)
-        p = reinterpret_cast<char*>(&dgram);
+        assert(data_len == tunnel_pkt.size()); //we only read enough byte to at most get the whole DTEP (+8 for DTEP header)
+        p = reinterpret_cast<char*>(&tunnel_pkt);
+        len_to_read = 1;
 
         if (cfg_.use_clt_grp_) { //potential for feedbackloop if both client and server are in the same subnet
 //however if that were the case, there would be no need to forward the datagrams
             memset(&pub_group, 0, sizeof(pub_group));
             pub_group.sin_family = AF_INET; 
-            pub_group.sin_port = htons(dgram.udp_dst_port_);
-            pub_group.sin_addr.s_addr = dgram.udp_dst_ip_;
+            pub_group.sin_port = htons(tunnel_pkt.udp_dst_port_);
+            pub_group.sin_addr.s_addr = tunnel_pkt.udp_dst_ip_;
         }
     
         // Multicasting the datagrams received from the client
-        if(sendto(udp_socket_, dgram.databuf_, dgram.datalen_, MSG_NOSIGNAL, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
+        if(sendto(udp_socket_, tunnel_pkt.databuf_, tunnel_pkt.datalen_, MSG_NOSIGNAL, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
             DEATH("Unable to publish multicast data, sendto() error %d!", errno);
         }
 
         //Getting group on which the datagram was published on client side
         char clt_grp_ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &dgram.udp_dst_ip_, clt_grp_ip, INET_ADDRSTRLEN);
+        inet_ntop(AF_INET, &tunnel_pkt.udp_dst_ip_, clt_grp_ip, INET_ADDRSTRLEN);
 
         //Getting group on which the server is publishing the forwared datagrams
         char pub_grp_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &pub_group.sin_addr, pub_grp_ip, INET_ADDRSTRLEN);
         INFO("Published to %s:%u a %u byte datagram tunneled by client. Client side group was %s:%u",
-        pub_grp_ip, ntohs(pub_group.sin_port), dgram.datalen_, clt_grp_ip, dgram.udp_dst_port_);
+        pub_grp_ip, ntohs(pub_group.sin_port), tunnel_pkt.datalen_, clt_grp_ip, tunnel_pkt.udp_dst_port_);
     }
 }
