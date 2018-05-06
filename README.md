@@ -20,6 +20,19 @@ Simple cross-platform client/server program forwarding UDP datagrams through a T
   dgramtunneler --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<udp_dst_port>
 ```
 
+In order to use the DatagramTunneler, you need to start the server side first and then the client side. If you don't, the client will just fail to connect to the server and exit right away.
+
+### Example
+server side:
+```
+./bin/datagramtunneler --server -i 192.168.0.104 -u 228.14.28.52:1234 -t 28052
+```
+
+client side:
+```
+./bin/datagramtunneler --client -i 192.168.0.105 -u 228.1.2.3:7437 -t 192.168.0.104:28052
+```
+
 ## How does it work?
 The purpose of the DatagramTunneler is to transfer multicast data from one subnet A to another subnet B where that multicast channel is not available. To achieve this, the DatagramTunneler is split into 2 sides: a client side and a server side, as shown on the diagram below:
 ![Datagram Tunneler](doc/datagramtunneler_diagram.png)
@@ -47,18 +60,3 @@ Although this diagram should be self explanatory, here is a break down of all th
 * **UDP Channel Address**: destination address of the multicast group which the client joined to received that datagram
 * **UDP Channel Port**: destination port of the multicast group which the client joined to received that datagram
 * **Encapsulated UDP Datagram**: actual datagram received by the client from the multicast channel
-
-## How to use it
-In order to use the DatagramTunneler, you need to start the server side first and then the client side. If you don't, the client will just fail to connect to the server and exit right away.
-
-
-### Example
-server side:
-```
-./bin/datagramtunneler --server -i 192.168.0.104 -u 228.14.28.52:1234 -t 28052
-```
-
-client side:
-```
-./bin/datagramtunneler --client -i 192.168.0.105 -u 228.1.2.3:7437 -t 192.168.0.104:28052
-```
