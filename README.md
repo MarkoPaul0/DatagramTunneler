@@ -54,6 +54,7 @@ The server side should run in the subnet where the multicast is not available. O
 ### The Datagram Tunneler Encapsulation Protocol (DTEP)
 The Datagram Tunneler Protocol or DTEP is a simple binary protocol, which is described by the following diagram:
 ![](doc/proto_pkt.png)
+<img src="doc/proto_pkt.png" width="921">
 A DTEP packet has a 1 byte header specifying the type of payload it contains.
 #### Packet Type 0x00 = HEARTBEAT
 This type of packet has no payload. It is sent by the client to the server and helps ensure both ends of the connection know if the other end is alive.
