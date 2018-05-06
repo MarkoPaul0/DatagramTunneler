@@ -12,7 +12,7 @@
 Simple cross-platform client/server program forwarding UDP datagrams through a TCP connection (aka tunnel). The client joins a multicast group and forwards the received datagrams to the server, which in turns multicasts them on its own subnet.
 
 * Designed with simplicity in mind
-* Tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* so far. (obviously not Windows compatible)
+* Tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* (obviously not Windows compatible)
 
 ## Synopsis
 In order to use the DatagramTunneler you need to start the server side first, then the client side. If you don't, the client will just fail to connect to the server and exit right away.
@@ -22,14 +22,14 @@ In order to use the DatagramTunneler you need to start the server side first, th
 ```
 * **<udp_iface_ip>**: interface used to publish the forwarded datagrams
 * **<tcp_listen_port>**: tcp port used to listen for client connections
-* **<udp_dst_ip>:\<port>**: (optional) udp destination IP and port where the server is publishing the forwarded datagrams
+* **<udp_dst_ip>:\<port>**: (optional) udp destination IP and port where the server is publishing the forwarded datagrams. If not provided, datagrams are published on the same channel joined by the client.
   
 ### Client
 ```
   dgramtunneler --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port>
 ```
 * **<udp_iface_ip>**: interface used to join the multicast channel provided by -u
-* **<tcp_srv_ip>:\<port>**: IP and port of the server
+* **<tcp_srv_ip>:\<port>**: IP and port of the server to which the datagram will be forwarded
 * **<udp_dst_ip>**:**\<port>**: udp destination IP and port of the channel we want to join
   
 ### Example
