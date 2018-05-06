@@ -4,23 +4,25 @@
 #include <string>
 #include "log.h"
 
+//TODO: have a function print the synopsis on cmd line arg error
+
 static uint16_t getPort(const std::string& port_arg) {
-    const int port_int = std::stoi(port_arg); //TODO: handle exception
-    if (port_int < 0 || port_int > UINT16_MAX) {
-        DEATH("Invalid port %d!", port_int);
+    try {
+        const int port_int = std::stoi(port_arg); //TODO: handle exception
+        if (port_int < 0 || port_int > UINT16_MAX) {
+            DEATH("Invalid port %d!", port_int);
+        }
+        return static_cast<uint16_t>(port_int);
+    } catch(std::invalid_argument& ex) {
+        DEATH("Invalid port %s!", port_arg.c_str());
     }
-    return static_cast<uint16_t>(port_int);
 }
 
 static void getIpPort(const std::string& ip_port_arg, std::string* ip_out, uint16_t* port_out) {
     size_t pos = ip_port_arg.find(':');
     
     //Case where no port is provided
-    if (pos == std::string::npos) {
-        *ip_out = ip_port_arg;
-        return;
-    }
-    if (pos == ip_port_arg.size() - 1) {
+    if (pos == std::string::npos || pos == ip_port_arg.size() - 1) {
         DEATH("Invalid ip-port argument '%s'.", ip_port_arg.c_str());
     }
 
