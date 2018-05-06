@@ -45,16 +45,18 @@ Although this diagram should be self explanatory, here is a break down of all th
 ## How to use it
 In order to use the DatagramTunneler, you need to start the server side first and then the client side. If you don't, the client will just fail to connect to the server and exit right away.
 Here is the synopsys:
-
-(coming soon)
+```
+  datagramtunneler --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<udp_dst_port>]
+  datagramtunneler --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<udp_dst_port>
+```
 
 ### Example
 server side:
 ```
-./bin/datagramtunneler --server -i 192.168.0.104 -u 228.14.28.52 -p 1234 -l 28052
+./bin/datagramtunneler --server -i 192.168.0.104 -u 228.14.28.52:1234 -t 28052
 ```
 
 client side:
 ```
-./bin/datagramtunneler --client -i 192.168.0.105 -u 228.1.2.3 -p 7437 -t 192.168.0.104 -l 28052
+./bin/datagramtunneler --client -i 192.168.0.105 -u 228.1.2.3:7437 -t 192.168.0.104:28052
 ```
