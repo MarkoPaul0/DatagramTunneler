@@ -35,7 +35,7 @@ client side:
 
 ## How does it work?
 The purpose of the DatagramTunneler is to transfer multicast data from one subnet A to another subnet B where that multicast channel is not available. To achieve this, the DatagramTunneler is split into 2 sides: a client side and a server side, as shown on the diagram below:
-![Datagram Tunneler](doc/datagramtunneler_diagram.png)
+![Datagram Tunneler](doc/diagram.png)
 
 ### The Client Side
 The client side should run in the subnet where the multicast channel is joinable. Once started it will do the following:
@@ -53,13 +53,13 @@ The server side should run in the subnet where the multicast is not available. O
 
 ### The Datagram Tunneler Encapsulation Protocol (DTEP)
 The Datagram Tunneler Protocol or DTEP is a simple binary protocol, which is described by the following diagram:
-![](doc/packet_proto.png)
+![](doc/proto_pkt.png)
 A DTEP packet has a 1 byte header determing the type of payload seen in the remainder of the packet.
 #### Packet Type 0x00 = HEARTBEAT
 This type of packet has no payload. It is sent by the client to the server and helps ensure both ends of the connection know if they are alive.
 #### Packet Type 0x01 = DATAGRAM
 This type of packet has a payload, which is described by the following diagram:
-![](doc/payload_proto.png)
+![](doc/proto_payload.png)
 
 Although this diagram should be self explanatory, here is a break down of all the fields:
 * **Datagram Length**: number of bytes of the encapsulated datagram (the DTEP header length is NOT included)
