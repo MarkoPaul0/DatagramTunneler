@@ -11,8 +11,8 @@
 
 Simple cross-platform client/server program forwarding UDP datagrams through a TCP connection (aka tunnel). The client joins a multicast group and forwards the received datagrams to the server, which in turns multicasts them on its own subnet.
 
-* Designed with simplicity in mind, not low latency.
-* Cross-platform: only tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* so far. (obviously not Windows compatible)
+* Designed with simplicity in mind
+* Tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* so far. (obviously not Windows compatible)
 
 ## Synopsis
 In order to use the DatagramTunneler you need to start the server side first, then the client side. If you don't, the client will just fail to connect to the server and exit right away.
