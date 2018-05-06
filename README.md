@@ -16,8 +16,8 @@ Simple cross-platform client/server program forwarding UDP datagrams through a T
 
 ## Synopsys
 ```
-  datagramtunneler --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<udp_dst_port>]
-  datagramtunneler --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<udp_dst_port>
+  dgramtunneler --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<udp_dst_port>]
+  dgramtunneler --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<udp_dst_port>
 ```
 
 ## How does it work?
