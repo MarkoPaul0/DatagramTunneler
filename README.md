@@ -14,6 +14,12 @@ Simple cross-platform client/server program forwarding UDP datagrams through a T
 * Designed with simplicity in mind, not low latency.
 * Cross-platform: only tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* so far. (obviously not Windows compatible)
 
+## Synopsys
+```
+  datagramtunneler --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<udp_dst_port>]
+  datagramtunneler --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<udp_dst_port>
+```
+
 ## How does it work?
 The purpose of the DatagramTunneler is to transfer multicast data from one subnet A to another subnet B where that multicast channel is not available. To achieve this, the DatagramTunneler is split into 2 sides: a client side and a server side, as shown on the diagram below:
 ![Datagram Tunneler](doc/datagramtunneler_diagram.png)
@@ -44,11 +50,7 @@ Although this diagram should be self explanatory, here is a break down of all th
 
 ## How to use it
 In order to use the DatagramTunneler, you need to start the server side first and then the client side. If you don't, the client will just fail to connect to the server and exit right away.
-Here is the synopsys:
-```
-  datagramtunneler --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<udp_dst_port>]
-  datagramtunneler --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<udp_dst_port>
-```
+
 
 ### Example
 server side:
