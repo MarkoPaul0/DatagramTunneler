@@ -52,7 +52,11 @@ static void getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
         }
         case 'p': {
             INFO("UDP destination port: %s", optarg);
-            cfg->udp_dst_port_ = std::stoi(optarg);
+            const int port_int = std::stoi(optarg); //TODO: handle exception
+            if (port_int < 0 || port_int > UINT16_MAX) {
+                DEATH("Invalid port %d!", port_int);
+            }
+            cfg->udp_dst_port_ = static_cast<uint16_t>(port_int);
             break;
         }
         case 't': {
@@ -62,7 +66,11 @@ static void getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
         }
         case 'l': {
             INFO("TCP server port:      %s", optarg);
-            cfg->tcp_srv_port_ = std::stoi(optarg);
+            const int port_int = std::stoi(optarg); //TODO: handle exception
+            if (port_int < 0 || port_int > UINT16_MAX) {
+                DEATH("Invalid port %d!", port_int);
+            }
+            cfg->tcp_srv_port_ = static_cast<uint16_t>(port_int);
             break;
         }
         default:

@@ -42,19 +42,20 @@ static_assert(sizeof(TunnelPacket) == 1481, "The TunnelPacket struct should be 1
 
 //This method is local to this cpp file, and simply does what its name suggests. Returns false if it fails and sets errno
 static bool sendTCPData(int tcp_socket, const void* data, size_t datalen, int flags) {
-    assert(datalen > 0); //I consider this a mistake in the code
-    int len_to_send = datalen;
+    size_t len_to_send = datalen;
     const char* p = reinterpret_cast<const char*>(data);
     do {
-        int len_sent = 0;
+        ssize_t len_sent = 0;
         if((len_sent = send(tcp_socket, p, len_to_send, flags)) < 0) { 
             return false;
         }
-        assert(len_sent > 0);
-        len_to_send -= len_sent;
+        if (len_sent == 0) {
+            DEATH("Unable to send data via TCP. The server might not be able to keep up!"); //although this is not technically an error, I do not want to keep going in that case
+        }
+        assert(len_to_send >= static_cast<size_t>(len_sent));
+        len_to_send -= static_cast<size_t>(len_sent);
         p += len_sent;
-        assert(len_to_send >= 0);
-    } while (len_to_send > 0);
+    } while (len_to_send != 0);
     return true;
 }
 
@@ -148,7 +149,7 @@ void DatagramTunneler::runClient() {
     TunnelPacket tunnel_pkt;
     inet_pton(AF_INET, cfg_.udp_dst_ip_.c_str(), &tunnel_pkt.udp_dst_ip_);
     tunnel_pkt.udp_dst_port_ = cfg_.udp_dst_port_;
-    int len_read = 0;
+    ssize_t len_read = 0;
     // Running loop
     while (true) {
         // Read datagram from udp socket
@@ -162,11 +163,11 @@ void DatagramTunneler::runClient() {
         } else {
             assert(len_read <= MAX_DGRAM_LEN);
             if (len_read > MAX_DGRAM_LEN) { //this is possible because we are using MSG_TRUNC flag
-                WARN("Discarding jumbo datagram of %d bytes!", len_read);
+                WARN("Discarding jumbo datagram of %zd bytes!", len_read);
                 continue;
             }
             tunnel_pkt.type_ = TunnelPktType::DATAGRAM;
-            INFO("Tunneling a %d byte datagram to server.", len_read);
+            INFO("Tunneling a %zd byte datagram to server.", len_read);
             tunnel_pkt.datalen_ = static_cast<uint16_t>(len_read);
         }
 
@@ -242,10 +243,10 @@ void DatagramTunneler::runServer() {
 
     TunnelPacket tunnel_pkt;
     char* p = reinterpret_cast<char*>(&tunnel_pkt); //a write pointer
-    int len_read = 0;
-    int len_to_read = 1;
+    ssize_t len_read = 0;
+    size_t len_to_read = 1;
     while(true) {
-        assert(len_to_read > 0);
+        assert(len_to_read != 0);
         // Reading data sent from client
         if ((len_read = recv(new_fd, p, len_to_read, NO_FLAGS)) < 0) {
             if (errno == EAGAIN) {
@@ -264,7 +265,8 @@ void DatagramTunneler::runServer() {
             continue;
         }
         p += len_read;
-        size_t data_len = p - reinterpret_cast<char*>(&tunnel_pkt);
+        assert(p > reinterpret_cast<char*>(&tunnel_pkt));
+        const size_t data_len = static_cast<size_t>(p - reinterpret_cast<char*>(&tunnel_pkt));
         if (data_len < 9) {
             len_to_read = 9 - data_len;
             continue; //read enough bytes to get the whole DTEP header
@@ -274,7 +276,7 @@ void DatagramTunneler::runServer() {
             continue; //we need the whole DTEP packet before publishing it
         }
         assert(data_len == tunnel_pkt.size()); //we only read enough byte to at most get the whole DTEP (+8 for DTEP header)
-        p = reinterpret_cast<char*>(&tunnel_pkt);
+        p = reinterpret_cast<char*>(&tunnel_pkt); //we have read a full packet, we now reset the write pointer to the beginning of tunnel_pkt
         len_to_read = 1;
 
         if (cfg_.use_clt_grp_) { //potential for feedbackloop if both client and server are in the same subnet
