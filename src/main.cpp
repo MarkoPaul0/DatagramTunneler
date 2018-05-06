@@ -1,4 +1,5 @@
 #include "DatagramTunneler.h"
+#include <stdexcept>
 #include <getopt.h>
 #include <iostream>
 #include <string>
