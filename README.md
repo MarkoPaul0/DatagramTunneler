@@ -6,8 +6,8 @@
 ![GitHub (pre-)release](https://img.shields.io/github/release/MarkoPaul0/WireBait/all.svg?style=flat-square)
 ![GitHub (pre-)release](https://img.shields.io/github/commits-since/MarkoPaul0/WireBait/latest.svg?style=flat-square)-->
 
-![](doc/demo_client.gif)
-![](doc/demo_server.gif)
+![](doc/demo_srv.gif)
+![](doc/demo_clt.gif)
 
 Simple cross-platform client/server program forwarding UDP datagrams through a TCP connection (aka tunnel). The client joins a multicast group and forwards the received datagrams to the server, which in turns multicasts them on its own subnet.
 
