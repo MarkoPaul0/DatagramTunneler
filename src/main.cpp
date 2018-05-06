@@ -1,5 +1,6 @@
 #include "DatagramTunneler.h"
 #include <getopt.h>
+#include <iostream>
 #include <string>
 #include "log.h"
 
@@ -41,6 +42,7 @@ static void getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
 
     int c = 0;
     bool side_selected = false;
+    cfg->use_clt_grp_ = true;
     while (c >= 0) {
         int opt_index = 0;
         if ((c = getopt_long (argc, argv, "sci:j:u:t:", long_options, &opt_index)) < 0) {
@@ -73,6 +75,7 @@ static void getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
         }
         case 'u': {
             INFO("UDP destination IP and port: %s", optarg);
+            cfg->use_clt_grp_ = false;
             std::string ip_port_arg(optarg);
             getIpPort(ip_port_arg, &cfg->udp_dst_ip_, &cfg->udp_dst_port_);
             break;
@@ -103,6 +106,10 @@ static void getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
             ERROR("Unkown argument %s", argv[optind++]);
         }
         exit(-1);
+    }
+    if (!cfg->is_client_ && cfg->use_clt_grp_) {
+        WARN("The server is set to publish tunneled packets on the same multicast group joined by the client. This is dangerous if both client and server are on the same subnet.\nPress Ctrl-C to quit or any key to continue");
+        getchar();
     }
     printf("\n");
 }
