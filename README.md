@@ -31,7 +31,7 @@ In order to use the DatagramTunneler you need to start the server side first, th
 * **<tcp_srv_ip>:\<port>**: IP and port of the server to which the datagram will be forwarded
 * **<udp_dst_ip>**:**\<port>**: udp destination IP and port of the channel we want to join
   
-### Example
+### Example (Don't forget to give a little star if this tool is useful to you :])
 server side:
 ```
 ./bin/datagramtunneler --server -i 192.168.0.104 -u 228.14.28.52:1234 -t 28052
@@ -41,6 +41,8 @@ client side:
 ```
 ./bin/datagramtunneler --client -i 192.168.0.105 -u 228.1.2.3:7437 -t 192.168.0.104:28052
 ```
+
+
 
 ## How does it work?
 The purpose of the DatagramTunneler is to transfer multicast data from one subnet A to another subnet B where that multicast channel is not available. To achieve this, the DatagramTunneler is split into 2 sides: a client side and a server side, as shown on the diagram below:
