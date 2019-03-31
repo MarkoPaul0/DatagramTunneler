@@ -2,6 +2,7 @@
 ![Author](https://img.shields.io/badge/author-MarkoPaul0-red.svg?style=flat-square)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 ![GitHub last commit](https://img.shields.io/github/last-commit/MarkoPaul0/DatagramTunneler.svg?style=flat-square&maxAge=300)
+![Stars](https://img.shields.io/github/stars/MarkoPaul0/DatagramTunneler.svg?style=social)
 <!--
 ![GitHub (pre-)release](https://img.shields.io/github/release/MarkoPaul0/WireBait/all.svg?style=flat-square)
 ![GitHub (pre-)release](https://img.shields.io/github/commits-since/MarkoPaul0/WireBait/latest.svg?style=flat-square)-->
@@ -31,7 +32,7 @@ In order to use the DatagramTunneler you need to start the server side first, th
 * **<tcp_srv_ip>:\<port>**: IP and port of the server to which the datagram will be forwarded
 * **<udp_dst_ip>**:**\<port>**: udp destination IP and port of the channel we want to join
   
-### Example (Don't forget to give a little star if this tool is useful to you :])
+### Example (Don't forget to give a little star if this tool is useful to you :] ![Stars](https://img.shields.io/github/stars/MarkoPaul0/DatagramTunneler.svg?style=social))
 server side:
 ```
 ./bin/datagramtunneler --server -i 192.168.0.104 -u 228.14.28.52:1234 -t 28052
