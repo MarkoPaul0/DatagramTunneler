@@ -59,6 +59,29 @@ static bool sendTCPData(int tcp_socket, const void* data, size_t datalen, int fl
     return true;
 }
 
+
+// ---------------------------- DatagramTunneler::Config Implementation--------------------------------
+DatagramTunneler::Config::Config() : is_client_(false), udp_iface_ip_(), tcp_iface_ip_(), tcp_srv_port_(0),
+                                     udp_dst_ip_(), udp_dst_port_(0), tcp_srv_ip_(), use_clt_grp_(false) {}
+
+bool DatagramTunneler::Config::isComplete() const {
+    if (udp_iface_ip_.empty() ||
+        //tcp_iface_ip_.empty() ||
+        tcp_srv_port_ == 0) {
+        return false;
+    }
+    if (is_client_) {
+        if (tcp_srv_ip_.empty() || udp_dst_ip_.empty() || udp_dst_port_ == 0) {
+            return false;
+        }
+    } else if (!use_clt_grp_ && (udp_dst_ip_.empty() || udp_dst_port_ == 0)) {
+        return false;
+    }
+    return true;
+}
+
+
+// ---------------------------- DatagramTunneler Implementation--------------------------------
 DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
     if (cfg.is_client_) {
         setupClient(cfg);

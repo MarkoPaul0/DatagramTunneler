@@ -11,7 +11,7 @@ public:
         std::string     udp_iface_ip_;
         std::string     tcp_iface_ip_;
         uint16_t        tcp_srv_port_;
-        std::string     udp_dst_ip_;    //Client uses this to join. Server uses this to publish if use_clt_multicast_ is false 
+        std::string     udp_dst_ip_;    //Client uses this to join. Server uses this to publish if use_clt_grp_ is false 
         uint16_t        udp_dst_port_;
          
         // Client specific
@@ -19,6 +19,13 @@ public:
 
         // Sevver specific
         bool            use_clt_grp_; //if true, the server will publish multicast data on the same group the client is listening
+
+        // Constructor
+        Config(); 
+
+        // Returns true if the config is complete, false otherwise.
+        // Note that being complete doesn't mean being valid. 
+        bool isComplete() const;
     };
 
     DatagramTunneler(Config cfg);   // Constructor

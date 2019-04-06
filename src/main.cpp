@@ -33,7 +33,7 @@ static void getIpPort(const std::string& ip_port_arg, std::string* ip_out, uint1
 } 
 
 //Parses the command line arguments to populate the provided DatagramTunneler::Config
-static void getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Config* const cfg) {
+static bool getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Config* const cfg) {
     static option long_options[] = { //TODO: review the use of static here
         {"server",   no_argument,       0, 's'},
         {"client",   no_argument,       0, 'c'},
@@ -110,18 +110,33 @@ static void getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
         }
         exit(-1);
     }
+    if (!cfg->isComplete()) {
+        return false;
+    }
     if (!cfg->is_client_ && cfg->use_clt_grp_) {
         WARN("The server is set to publish tunneled packets on the same multicast group joined by the client. This is dangerous if both client and server are on the same subnet.\nPress Ctrl-C to quit or any key to continue");
         getchar();
     }
     printf("\n");
+    return true;
+}
+
+static void printUsage(const char* binary_name) {
+    printf("Usage:\n");
+    printf("Server mode:\n");
+    printf("    %s --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>]\n", binary_name);
+    printf("Client mode:\n");
+    printf("    %s --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port>\n", binary_name);
 }
 
 int main(int argc, char* argv[]) {        
     //Parse command line config
     DatagramTunneler::Config cfg;
-    getCommandLineConfig(argc, argv, &cfg);
-    
+    if (!getCommandLineConfig(argc, argv, &cfg)) {
+        printUsage(argv[0]);
+        return 1;
+    }
+
     //Create and run the datagram tunneler with the parsed config
     DatagramTunneler tunneler(cfg);
     tunneler.run();
