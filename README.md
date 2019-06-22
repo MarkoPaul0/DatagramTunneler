@@ -70,7 +70,7 @@ In order to use the DatagramTunneler you need to start the server side first, th
 <a name="examples"/>
 
 ## Examples 
-(Don't forget to give a little star if this tool is useful to you :] ![Stars](https://img.shields.io/github/stars/MarkoPaul0/DatagramTunneler.svg?style=social))
+(Don't forget to give a little star if this tool is useful to you :] [![Stars](https://img.shields.io/github/stars/MarkoPaul0/DatagramTunneler.svg?style=social)](https://github.com/MarkoPaulo/DatagramTunneler)
 server side:
 ```
 ./bin/datagramtunneler --server -i 192.168.0.104 -u 228.14.28.52:1234 -t 28052
