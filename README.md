@@ -14,17 +14,17 @@ Simple cross-platform client/server program forwarding UDP datagrams through a T
 * Designed with simplicity in mind
 * Tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* (obviously not Windows compatible)
 
-# Installation in 10 seconds
-1) Download or clone the repository.
-2) Go into the repository:
+## Installation in 10 seconds
+* Download or clone the repository.
+* Go into the repository: 
 ```
 cd <path_to_the_repo>/DatagramTunneler
 ```
-3) Build the DatagramTunneler by simply running make:
+* Build the DatagramTunneler by simply running make:
 ```
 make
 ```
-4) You're ready to run the DatagramTunneler binary:
+* You're ready to run the DatagramTunneler binary:
 ```
 ./bin/DatagramTunneler -h
 ```
