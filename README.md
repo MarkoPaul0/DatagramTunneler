@@ -14,6 +14,23 @@ Simple cross-platform client/server program forwarding UDP datagrams through a T
 * Designed with simplicity in mind
 * Tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* (obviously not Windows compatible)
 
+## Content
+[Requirements](#requirements)<br/>
+[Installation](#installation)<br/>
+[Synopsis](#synopsis)<br/>
+[Examples](#examples)<br/>
+[How does it work?](#how_it_works)<br/>
+[The DTEP Protocol](#dtep)<br/>
+[Licensing](#licensing)<br/>
+
+<a name="requirements"/>
+
+## Requirements
+* A computer running a linux distribution
+* A c++ compiler
+
+<a name="installation"/>
+
 ## Installation in 10 seconds
 * Download or clone the repository.
 * Go into the repository: 
@@ -29,6 +46,8 @@ make
 ./bin/DatagramTunneler -h
 ```
 For more info about how to run it, checkout the *Synopsis below*
+
+<a name="synopsis"/>
 
 ## Synopsis
 In order to use the DatagramTunneler you need to start the server side first, then the client side. If you don't, the client will just fail to connect to the server and exit right away.
@@ -48,7 +67,10 @@ In order to use the DatagramTunneler you need to start the server side first, th
 * **<tcp_srv_ip>:\<port>**: IP and port of the server to which the datagram will be forwarded
 * **<udp_dst_ip>**:**\<port>**: udp destination IP and port of the channel we want to join
   
-### Example (Don't forget to give a little star if this tool is useful to you :] ![Stars](https://img.shields.io/github/stars/MarkoPaul0/DatagramTunneler.svg?style=social))
+<a name="examples"/>
+
+## Examples 
+(Don't forget to give a little star if this tool is useful to you :] ![Stars](https://img.shields.io/github/stars/MarkoPaul0/DatagramTunneler.svg?style=social))
 server side:
 ```
 ./bin/datagramtunneler --server -i 192.168.0.104 -u 228.14.28.52:1234 -t 28052
@@ -60,6 +82,7 @@ client side:
 ```
 
 
+<a name="how_it_works"/>
 
 ## How does it work?
 The purpose of the DatagramTunneler is to transfer multicast data from one subnet A to another subnet B where that multicast channel is not available. To achieve this, the DatagramTunneler is split into 2 sides: a client side and a server side, as shown on the diagram below:
@@ -95,3 +118,8 @@ Although this diagram should be self explanatory, here is a break down of all th
 * **UDP Channel Address**: destination address of the multicast group which the client joined to receive that datagram
 * **UDP Channel Port**: destination port of the multicast group which the client joined to receive that datagram
 * **Encapsulated UDP Datagram**: actual datagram received by the client from the multicast channel
+
+<a name="licensing"/>
+
+## Licensing
+//TODO
