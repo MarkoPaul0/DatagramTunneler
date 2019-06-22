@@ -26,7 +26,7 @@ Simple cross-platform client/server program forwarding UDP datagrams through a T
 <a name="requirements"/>
 
 ## Requirements
-* A computer running a linux distribution
+* A computer running a Linux or Mac OS distribution
 * A c++ compiler
 
 <a name="installation"/>
