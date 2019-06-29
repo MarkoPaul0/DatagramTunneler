@@ -12,7 +12,8 @@
 Simple cross-platform client/server program forwarding UDP datagrams through a TCP connection (aka tunnel). The client joins a multicast group and forwards the received datagrams to the server, which in turns multicasts them on its own subnet.
 
 * Designed with simplicity in mind
-* Tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* (obviously not Windows compatible)
+* Tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* 
+* **NOT** Windows compatible
 
 ## Content
 [Requirements](#requirements)<br/>
