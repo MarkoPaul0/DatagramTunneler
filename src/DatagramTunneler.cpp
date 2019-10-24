@@ -1,52 +1,58 @@
 #include "DatagramTunneler.h"
-#include <sys/socket.h>
-#include <cstring>
-#include <cerrno>
-#include <unistd.h>
-#include <cstdint>
-#include <sys/types.h>
-#include <netinet/in.h>
+
 #include <arpa/inet.h>
+#include <assert.h>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include "Log.h"
+
 #ifndef MSG_NOSIGNAL
-//MSG_NOSIGNAL is posix but somehow not portable (undefined on OSX) 
+// MSG_NOSIGNAL is posix but somehow not portable (undefined on OSX)
 #define MSG_NOSIGNAL 0 // 0 = no flags
 #endif
 
-static const int        NO_FLAGS = 0;
-static const int        MAX_DGRAM_LEN = 1472;       //jumbo frames are not supported
-static const int        HEARTBEAT_PERIOD_SEC = 5;   //client will send tunnel at least 1 packet every 5 seconds wether or not a datagram is received
+static const int NO_FLAGS = 0;
+static const int MAX_DGRAM_LEN = 1472;       // Jumbo frames are not supported
+static const int HEARTBEAT_PERIOD_SEC = 5;   // Client will send tunnel at least 1 packet every 5 seconds wether or not a datagram is received
 
 enum TunnelPktType : uint8_t {
     HEARTBEAT = 0,
     DATAGRAM = 1
 };
 
+
 #pragma pack(push,1)
-struct TunnelPacket { //Structure used to tunnel the datagrams
+struct TunnelPacket { // Structure used to tunnel the datagrams
     TunnelPktType   type_;                     // Packet type
-    uint32_t        udp_dst_ip_;               // UDP destination address 
+    uint32_t        udp_dst_ip_;               // UDP destination address
     uint16_t        udp_dst_port_;             // UDP destination port
     uint16_t        datalen_;                  // Datagram length
     char            databuf_[MAX_DGRAM_LEN];   // Datagram buffer
-    
+
     size_t size() const {
-        if (type_ == TunnelPktType::HEARTBEAT) {
+        if (type_ == TunnelPktType::HEARTBEAT)
             return 1;
-        } else {
+        else
             return static_cast<size_t>(datalen_ + 9);
-        }
     }
 };
 static_assert(sizeof(TunnelPacket) == 1481, "The TunnelPacket struct should be 1481 bytes long!");
 #pragma pack(pop)
 
-//This method is local to this cpp file, and simply does what its name suggests. Returns false if it fails and sets errno
+
+// This method is local to this cpp file, and simply does what its name suggests. Returns false if it fails and sets errno
 static bool sendTCPData(int tcp_socket, const void* data, size_t datalen, int flags) {
     size_t len_to_send = datalen;
     const char* p = reinterpret_cast<const char*>(data);
     do {
         ssize_t len_sent = 0;
-        if((len_sent = send(tcp_socket, p, len_to_send, flags)) < 0) { 
+        if((len_sent = send(tcp_socket, p, len_to_send, flags)) < 0) {
             return false;
         }
         if (len_sent == 0) {
@@ -64,9 +70,10 @@ static bool sendTCPData(int tcp_socket, const void* data, size_t datalen, int fl
 DatagramTunneler::Config::Config() : is_client_(false), udp_iface_ip_(), tcp_iface_ip_(), tcp_srv_port_(0),
                                      udp_dst_ip_(), udp_dst_port_(0), tcp_srv_ip_(), use_clt_grp_(false) {}
 
+
 bool DatagramTunneler::Config::isComplete() const {
     if (udp_iface_ip_.empty() ||
-        //tcp_iface_ip_.empty() ||
+        //tcp_iface_ip_.empty() || //TODO
         tcp_srv_port_ == 0) {
         return false;
     }
@@ -82,23 +89,19 @@ bool DatagramTunneler::Config::isComplete() const {
 
 
 // ---------------------------- DatagramTunneler Implementation--------------------------------
-DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(cfg) {
-    if (cfg.is_client_) {
+DatagramTunneler::DatagramTunneler(const Config& cfg) : cfg_(cfg) {
+    if (cfg.is_client_)
         setupClient(cfg);
-    } else { 
+    else
         setupServer(cfg);
-    }
 }
 
-DatagramTunneler::~DatagramTunneler() {
-}
 
 void DatagramTunneler::run() {
-    if (cfg_.is_client_) {
+    if (cfg_.is_client_)
         runClient();
-    } else {
+    else
         runServer();
-    }
 }
 
 
@@ -146,6 +149,7 @@ void DatagramTunneler::setupClient(const Config& cfg) {
 #endif
 }
 
+
 void DatagramTunneler::runClient() {
     // Connect to TCP server
     sockaddr_in server_addr;
@@ -156,7 +160,7 @@ void DatagramTunneler::runClient() {
     if (connect(tcp_socket_, reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)) < 0) {
         DEATH("Unable to connect to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, errno);
     }
-    INFO("[DatagramTunneler][CLIENT-MODE] connected to TCP remote %s:%u and listening to multicast %s:%u", 
+    INFO("[DatagramTunneler][CLIENT-MODE] connected to TCP remote %s:%u and listening to multicast %s:%u",
     cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
 
     // Join multicast group
@@ -212,29 +216,30 @@ void DatagramTunneler::setupServer(const Config& cfg) {
     if (udp_socket_ < 0) {
         DEATH("Could not create UDP socket! Error %d", errno);
     }
-    
+
     // Setting up the UDP publishing interface
     in_addr iface;
     iface.s_addr = inet_addr(cfg_.udp_iface_ip_.c_str());
     if(setsockopt(udp_socket_, IPPROTO_IP, IP_MULTICAST_IF, &iface, sizeof(iface)) < 0) {
         DEATH("Could not set UDP publisher interface to %s! Error %d", cfg_.udp_iface_ip_.c_str(), errno);
     }
-    
+
     // Creating TCP socket
     tcp_socket_ = socket(AF_INET , SOCK_STREAM , NO_FLAGS);
     if (tcp_socket_ < 0) {
         DEATH("Could not create TCP socket! Error %d", errno);
     }
-    
+
     // Binding the TCP socket
     sockaddr_in tcp_iface;
     tcp_iface.sin_family = AF_INET;
     tcp_iface.sin_port = htons (cfg_.tcp_srv_port_);
-    tcp_iface.sin_addr.s_addr = htonl(INADDR_ANY); //TODO: review that 
+    tcp_iface.sin_addr.s_addr = htonl(INADDR_ANY); //TODO: review that
     if(bind(tcp_socket_, reinterpret_cast<sockaddr*>(&tcp_iface), sizeof(tcp_iface)) < 0) {
         DEATH("Could not bind TCP socket to port %u! Error %d", cfg.tcp_srv_port_, errno);
     }
 }
+
 
 void DatagramTunneler::runServer() {
     INFO("[DatagramTunneler][SERVER MODE] listening for client connection on port %u...", cfg_.tcp_srv_port_);
@@ -259,7 +264,7 @@ void DatagramTunneler::runServer() {
     sockaddr_in pub_group;
     if (!cfg_.use_clt_grp_) { //if not reusing the multicast joined by the client then using the one set in the configuration to publish data
         memset(&pub_group, 0, sizeof(pub_group));
-        pub_group.sin_family = AF_INET; 
+        pub_group.sin_family = AF_INET;
         pub_group.sin_port = htons(cfg_.udp_dst_port_);
         pub_group.sin_addr.s_addr = inet_addr(cfg_.udp_dst_ip_.c_str());
     }
@@ -305,11 +310,11 @@ void DatagramTunneler::runServer() {
         if (cfg_.use_clt_grp_) { //potential for feedbackloop if both client and server are in the same subnet
 //however if that were the case, there would be no need to forward the datagrams
             memset(&pub_group, 0, sizeof(pub_group));
-            pub_group.sin_family = AF_INET; 
+            pub_group.sin_family = AF_INET;
             pub_group.sin_port = htons(tunnel_pkt.udp_dst_port_);
             pub_group.sin_addr.s_addr = tunnel_pkt.udp_dst_ip_;
         }
-    
+
         // Multicasting the datagrams received from the client
         if(sendto(udp_socket_, tunnel_pkt.databuf_, tunnel_pkt.datalen_, MSG_NOSIGNAL, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
             DEATH("Unable to publish multicast data, sendto() error %d!", errno);

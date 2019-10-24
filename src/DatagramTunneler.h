@@ -1,8 +1,6 @@
 #pragma once
-#include <cstdint>
-#include <assert.h>
+
 #include <string>
-#include "log.h"
 
 class DatagramTunneler {
 public:
@@ -11,25 +9,27 @@ public:
         std::string     udp_iface_ip_;
         std::string     tcp_iface_ip_;
         uint16_t        tcp_srv_port_;
-        std::string     udp_dst_ip_;    //Client uses this to join. Server uses this to publish if use_clt_grp_ is false 
+        std::string     udp_dst_ip_;    // Client uses this to join. Server uses this to publish if use_clt_grp_ is false
         uint16_t        udp_dst_port_;
-         
+
         // Client specific
         std::string     tcp_srv_ip_;
 
-        // Sevver specific
-        bool            use_clt_grp_; //if true, the server will publish multicast data on the same group the client is listening
+        // Server specific
+        bool            use_clt_grp_; // If true, the server will publish multicast data on the same group the client is listening
 
         // Constructor
-        Config(); 
+        Config();
 
         // Returns true if the config is complete, false otherwise.
-        // Note that being complete doesn't mean being valid. 
+        // Note that being complete doesn't mean being valid.
         bool isComplete() const;
     };
 
-    DatagramTunneler(Config cfg);   // Constructor
-    ~DatagramTunneler();            // Destructor
+    // Constructor
+    DatagramTunneler(const Config& cfg);
+
+    // Run method, to be called after instantiation
     void run();
 
 private:

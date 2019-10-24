@@ -1,11 +1,10 @@
 #include "DatagramTunneler.h"
-#include <stdexcept>
-#include <getopt.h>
-#include <iostream>
-#include <string>
-#include "log.h"
 
-//TODO: have a function print the synopsis on cmd line arg error
+#include <getopt.h>
+#include <string>
+
+#include "Log.h"
+
 
 static uint16_t getPort(const std::string& port_arg) {
     try {
@@ -19,20 +18,22 @@ static uint16_t getPort(const std::string& port_arg) {
     }
 }
 
-static void getIpPort(const std::string& ip_port_arg, std::string* ip_out, uint16_t* port_out) {
+
+static void getIpAndPort(const std::string& ip_port_arg, std::string* ip_out, uint16_t* port_out) {
     size_t pos = ip_port_arg.find(':');
-    
-    //Case where no port is provided
+
+    // Case where no port is provided
     if (pos == std::string::npos || pos == ip_port_arg.size() - 1) {
         DEATH("Invalid ip-port argument '%s'.", ip_port_arg.c_str());
     }
 
-    //Case where ip and port are provided
+    // Case where ip and port are provided
     *ip_out = ip_port_arg.substr(0,pos);
-    *port_out = getPort(ip_port_arg.substr(pos + 1)); 
-} 
+    *port_out = getPort(ip_port_arg.substr(pos + 1));
+}
 
-//Parses the command line arguments to populate the provided DatagramTunneler::Config
+
+// Parses the command line arguments to populate the provided DatagramTunneler::Config
 static bool getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Config* const cfg) {
     static option long_options[] = { //TODO: review the use of static here
         {"server",   no_argument,       0, 's'},
@@ -50,7 +51,7 @@ static bool getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
         int opt_index = 0;
         if ((c = getopt_long (argc, argv, "sci:j:u:t:", long_options, &opt_index)) < 0) {
             break;//end of options;
-        }    
+        }
         switch (c)
         {
         case 's': {
@@ -80,7 +81,7 @@ static bool getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
             INFO("UDP destination IP and port: %s", optarg);
             cfg->use_clt_grp_ = false;
             std::string ip_port_arg(optarg);
-            getIpPort(ip_port_arg, &cfg->udp_dst_ip_, &cfg->udp_dst_port_);
+            getIpAndPort(ip_port_arg, &cfg->udp_dst_ip_, &cfg->udp_dst_port_);
             break;
         }
         case 't': {
@@ -88,7 +89,7 @@ static bool getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
             std::string ip_port_arg(optarg);
             if (cfg->is_client_) {
                 INFO("TCP server IP and port:      %s", optarg);
-                getIpPort(ip_port_arg, &cfg->tcp_srv_ip_, &cfg->tcp_srv_port_);
+                getIpAndPort(ip_port_arg, &cfg->tcp_srv_ip_, &cfg->tcp_srv_port_);
             } else  {
                 INFO("TCP server listen port:      %s", optarg);
                 cfg->tcp_srv_port_ = getPort(ip_port_arg);
@@ -103,23 +104,25 @@ static bool getCommandLineConfig(int argc, char* argv[], DatagramTunneler::Confi
         }
     }
 
-    //If there are unkown options
+    // If there are unkown options
     if (optind < argc) {
         while (optind < argc) {
             ERROR("Unkown argument %s", argv[optind++]);
         }
-        exit(-1);
+        exit(1);
     }
     if (!cfg->isComplete()) {
         return false;
     }
     if (!cfg->is_client_ && cfg->use_clt_grp_) {
-        WARN("The server is set to publish tunneled packets on the same multicast group joined by the client. This is dangerous if both client and server are on the same subnet.\nPress Ctrl-C to quit or any key to continue");
+        WARN("The server is set to publish tunneled packets on the same multicast group joined by the client."
+             "This is dangerous if both client and server are on the same subnet.\nPress Ctrl-C to quit or any key to continue");
         getchar();
     }
     printf("\n");
     return true;
 }
+
 
 static void printUsage(const char* binary_name) {
     printf("Usage:\n");
@@ -129,15 +132,16 @@ static void printUsage(const char* binary_name) {
     printf("    %s --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port>\n", binary_name);
 }
 
-int main(int argc, char* argv[]) {        
-    //Parse command line config
+
+int main(int argc, char* argv[]) {
+    // Parse command line config
     DatagramTunneler::Config cfg;
     if (!getCommandLineConfig(argc, argv, &cfg)) {
         printUsage(argv[0]);
         return 1;
     }
 
-    //Create and run the datagram tunneler with the parsed config
+    // Create and run the datagram tunneler with the parsed config
     DatagramTunneler tunneler(cfg);
     tunneler.run();
 
