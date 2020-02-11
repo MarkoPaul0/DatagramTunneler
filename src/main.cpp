@@ -1,6 +1,8 @@
 #include "DatagramTunneler.h"
 
+#include <cassert>
 #include <getopt.h>
+#include <stdexcept>
 #include <string>
 
 #include "Log.h"
