@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-package:
+    name: Build and package (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu
+            os: ubuntu-latest
+          - name: macos
+            os: macos-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build with CMake
+        run: cmake --build build-cmake --config Release
+
+      - name: Smoke test CMake executable
+        run: ./build-cmake/dgramtunneler --version
+
+      - name: Run CTest suite
+        run: ctest --test-dir build-cmake --output-on-failure
+
+      - name: Build with the legacy Makefile
+        run: make
+
+      - name: Smoke test legacy executable
+        run: ./bin/datagramtunneler --version
+
+      - name: Create release archives
+        run: cpack --config build-cmake/CPackConfig.cmake -B release-artifacts
+
+      - name: Validate Debian package
+        if: matrix.name == 'ubuntu'
+        run: |
+          dpkg-deb --info release-artifacts/*.deb
+          dpkg-deb --contents release-artifacts/*.deb
+
+      - name: Upload release archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: dgramtunneler-${{ matrix.name }}
+          path: release-artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-build:
+    name: Build and package (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-2022
+            os: windows-2022
+          - name: windows-latest
+            os: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build with CMake
+        run: cmake --build build-cmake --config Release
+
+      - name: Smoke test executable
+        shell: pwsh
+        run: .\build-cmake\Release\dgramtunneler.exe --version
+
+      - name: Run portable CTest checks
+        run: ctest --test-dir build-cmake -C Release --output-on-failure -R "unit_tests|version_command"
+
+      - name: Create Windows ZIP
+        run: cpack -G ZIP --config build-cmake/CPackConfig.cmake -B release-artifacts
+
+      - name: Verify Windows ZIP
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem release-artifacts -Filter '*.zip'
+          if ($archive.Count -ne 1) { throw 'Expected exactly one Windows ZIP artifact.' }
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath extracted-artifact -Force
+          $binary = Get-ChildItem extracted-artifact -Filter dgramtunneler.exe -Recurse
+          if ($binary.Count -ne 1) { throw 'Windows ZIP does not contain dgramtunneler.exe.' }
+          & $binary.FullName --version
+
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: dgramtunneler-${{ matrix.name }}
+          path: release-artifacts/*.zip
+          if-no-files-found: error
+          retention-days: 14

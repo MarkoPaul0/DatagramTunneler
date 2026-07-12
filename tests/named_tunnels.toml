@@ -1,0 +1,13 @@
+version = 1
+
+[tunnels.example-client]
+mode = "client"
+udp_interface = "127.0.0.1"
+udp_group = "239.1.2.3:5000"
+tcp_server = "127.0.0.1:14052"
+
+[tunnels.example-server]
+mode = "server"
+udp_interface = "127.0.0.1"
+tcp_listen_port = 14052
+udp_destination = "239.1.2.4:5000"
