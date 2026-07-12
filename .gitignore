@@ -7,6 +7,8 @@ bin/*
 # ignore local build directories
 /build/
 /build-cmake/
+/install-test/
+/release-artifacts/
 
 # local planning notes
 _specs/

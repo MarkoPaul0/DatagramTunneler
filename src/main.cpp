@@ -7,6 +7,10 @@
 
 #include "Log.h"
 
+#ifndef DGRAMTUNNELER_VERSION
+#define DGRAMTUNNELER_VERSION "development"
+#endif
+
 
 static uint16_t getPort(const std::string& port_arg) {
     try {
@@ -135,7 +139,17 @@ static void printUsage(const char* binary_name) {
 }
 
 
+static void printVersion() {
+    printf("dgramtunneler %s\n", DGRAMTUNNELER_VERSION);
+}
+
+
 int main(int argc, char* argv[]) {
+    if (argc == 2 && (std::string(argv[1]) == "--version" || std::string(argv[1]) == "-V")) {
+        printVersion();
+        return 0;
+    }
+
     // Parse command line config
     DatagramTunneler::Config cfg;
     if (!getCommandLineConfig(argc, argv, &cfg)) {

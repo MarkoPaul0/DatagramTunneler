@@ -29,6 +29,7 @@ Simple cross-platform client/server program forwarding UDP datagrams through a T
 ## Requirements
 * A computer running a Linux or Mac OS distribution
 * A c++ compiler
+* CMake 3.16 or later for the supported build and release workflow
 
 <a name="installation"/>
 
@@ -47,6 +48,10 @@ cmake --build build-cmake
 ```
 ./build-cmake/dgramtunneler
 ```
+* To print the build version, run:
+```
+./build-cmake/dgramtunneler --version
+```
 * The existing Makefile build remains available during the migration:
 ```
 make
@@ -56,6 +61,18 @@ make
 ./bin/datagramtunneler
 ```
 For more info about how to run it, checkout the *Synopsis below*
+
+### Release archives
+
+The root `VERSION` file is the single source of the release version. To create release archives for the current platform:
+
+```
+cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build-cmake
+cpack --config build-cmake/CPackConfig.cmake -B release-artifacts
+```
+
+This produces `.tar.gz` and `.zip` archives named `dgramtunneler-<version>-<system>-<architecture>`. Each archive contains a top-level directory with `bin/dgramtunneler`.
 
 <a name="synopsis"/>
 
