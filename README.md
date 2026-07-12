@@ -12,7 +12,7 @@ It supports current Linux, macOS, and Windows 10/11 releases, direct command-lin
 
 ### Debian and Ubuntu
 
-Install a Debian package from a release, or one you built locally, with `apt`:
+Download the Debian package from the [latest release](https://github.com/MarkoPaul0/DatagramTunneler/releases/latest), then install it with `apt`:
 
 ```sh
 sudo apt install ./dgramtunneler_<version>-1_<architecture>.deb
@@ -22,11 +22,16 @@ On Linux, the release build produces this `.deb` package alongside portable `.ta
 
 ### macOS and Linux: Homebrew
 
-A Homebrew formula template and release workflow are included, but the public `MarkoPaul0/dgramtunneler` tap has not yet been published. Homebrew installation will be documented here once the tap is live; until then, build from source below.
+Install from the official tap:
+
+```sh
+brew tap MarkoPaul0/dgramtunneler
+brew install dgramtunneler
+```
 
 ### Windows 10 and 11
 
-[Windows CI runs](https://github.com/MarkoPaul0/DatagramTunneler/actions) produce portable ZIP artifacts. Extract one, add its `bin` directory to `PATH`, and run:
+Download the Windows AMD64 ZIP from the [latest release](https://github.com/MarkoPaul0/DatagramTunneler/releases/latest). Extract it, add its `bin` directory to `PATH`, and run:
 
 ```powershell
 dgramtunneler.exe --version
@@ -117,7 +122,7 @@ cpack --config build-cmake/CPackConfig.cmake -B release-artifacts
 
 This produces `.tar.gz` and `.zip` archives named `dgramtunneler-<version>-<system>-<architecture>`. Linux also produces a Debian `.deb` package.
 
-For Homebrew publishing, use the [tap release procedure](packaging/homebrew/README.md).
+For Homebrew updates, use the [tap release procedure](packaging/homebrew/README.md).
 
 ## Tests
 
