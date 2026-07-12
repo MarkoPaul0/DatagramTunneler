@@ -8,8 +8,16 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+// Windows headers define ERROR as a macro. The application uses ERROR for logging.
+#ifdef ERROR
+#undef ERROR
+#endif
 
 using SocketHandle = SOCKET;
 using SocketIoSize = int;
