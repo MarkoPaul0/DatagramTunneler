@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-package:
+    name: Build and package (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu
+            os: ubuntu-latest
+          - name: macos
+            os: macos-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build with CMake
+        run: cmake --build build-cmake --config Release
+
+      - name: Smoke test CMake executable
+        run: ./build-cmake/dgramtunneler --version
+
+      - name: Build with the legacy Makefile
+        run: make
+
+      - name: Smoke test legacy executable
+        run: ./bin/datagramtunneler --version
+
+      - name: Create release archives
+        run: cpack --config build-cmake/CPackConfig.cmake -B release-artifacts
+
+      - name: Upload release archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: dgramtunneler-${{ matrix.name }}
+          path: release-artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-readiness:
+    name: Windows readiness
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure CMake with MSVC
+        run: cmake -S . -B build-cmake
+
+      - name: Record current compatibility boundary
+        shell: pwsh
+        run: Write-Host "::notice title=Windows support pending::The source still uses POSIX socket and getopt APIs. Task 6 will make this job build and package the Windows executable."
