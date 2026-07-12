@@ -18,6 +18,7 @@ include(GNUInstallDirs)
 add_executable(dgramtunneler
     src/main.cpp
     src/CommandLine.cpp
+    src/Configuration.cpp
     src/Network.cpp
     src/DatagramTunneler.cpp)
 
@@ -73,6 +74,7 @@ if(BUILD_TESTING)
     add_executable(dgramtunneler_unit_tests
         tests/unit_tests.cpp
         src/CommandLine.cpp
+        src/Configuration.cpp
         src/Network.cpp
         src/DatagramTunneler.cpp)
     target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_20)
@@ -98,6 +100,11 @@ if(BUILD_TESTING)
     add_test(NAME version_command COMMAND dgramtunneler --version)
     set_tests_properties(version_command PROPERTIES
         PASS_REGULAR_EXPRESSION "dgramtunneler [0-9]+\\.[0-9]+\\.[0-9]+")
+
+    add_test(NAME config_path_command
+        COMMAND dgramtunneler config path --config named-tunnels.toml)
+    set_tests_properties(config_path_command PROPERTIES
+        PASS_REGULAR_EXPRESSION "named-tunnels\\.toml")
 
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)

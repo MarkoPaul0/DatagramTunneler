@@ -1,8 +1,12 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
+#include <stdexcept>
 
 #include "CommandLine.h"
+#include "Configuration.h"
+#include "Network.h"
 #include "Protocol.h"
 
 namespace {
@@ -55,9 +59,64 @@ bool testClientCommandLineParsing() {
            expect(config.udp_dst_port_ == 5000, "multicast port must be parsed");
 }
 
+bool testNamedTunnelConfiguration() {
+    std::istringstream input(R"(version = 1
+
+[tunnels.office-client]
+mode = "client"
+udp_interface = "127.0.0.1"
+udp_group = "239.1.2.3:5000"
+tcp_server = "127.0.0.1:14052"
+
+[tunnels.office-server]
+mode = "server"
+udp_interface = "127.0.0.1"
+tcp_listen_port = 14052
+udp_destination = "239.1.2.4:5000"
+)");
+
+    const TunnelConfiguration configuration = parseConfiguration(input);
+    if (!expect(configuration.tunnels.size() == 2, "both named tunnels must be loaded")) {
+        return false;
+    }
+
+    const NamedTunnel& client = findTunnel(configuration, "office-client");
+    const NamedTunnel& server = findTunnel(configuration, "office-server");
+    return expect(client.config.is_client_, "client tunnel mode must be selected") &&
+           expect(client.config.tcp_srv_port_ == 14052, "client server port must be parsed") &&
+           expect(!server.config.is_client_, "server tunnel mode must be selected") &&
+           expect(server.config.udp_dst_port_ == 5000, "server destination port must be parsed");
+}
+
+bool testInvalidNamedTunnelConfiguration() {
+    std::istringstream input(R"(version = 1
+
+[tunnels.bad-client]
+mode = "client"
+udp_interface = "127.0.0.1"
+udp_group = "239.1.2.3:5000"
+tcp_server = "127.0.0.1:14052"
+unknown = "value"
+)");
+    try {
+        static_cast<void>(parseConfiguration(input));
+    } catch (const std::runtime_error&) {
+        return true;
+    }
+    return expect(false, "unknown named-tunnel fields must be rejected");
+}
+
 } // namespace
 
 
 int main() {
-    return testProtocolFraming() && testClientCommandLineParsing() ? 0 : 1;
+    int network_error = 0;
+    if (!initializeNetwork(&network_error)) {
+        std::fprintf(stderr, "Test failure: network initialization failed (%d)\n", network_error);
+        return 1;
+    }
+    return testProtocolFraming() && testClientCommandLineParsing() && testNamedTunnelConfiguration() &&
+                   testInvalidNamedTunnelConfiguration()
+               ? 0
+               : 1;
 }

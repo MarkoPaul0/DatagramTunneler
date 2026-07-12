@@ -6,14 +6,17 @@ SRC_DIR=src/
 BUILD_DIR=build/
 BIN_DIR=bin/
 
-$(BIN_DIR)datagramtunneler: $(BUILD_DIR)DatagramTunneler.o $(BUILD_DIR)CommandLine.o $(BUILD_DIR)Network.o $(BUILD_DIR)main.o
-	g++ $(BUILD_DIR)DatagramTunneler.o $(BUILD_DIR)CommandLine.o $(BUILD_DIR)Network.o $(BUILD_DIR)main.o -o $(BIN_DIR)datagramtunneler
+$(BIN_DIR)datagramtunneler: $(BUILD_DIR)DatagramTunneler.o $(BUILD_DIR)CommandLine.o $(BUILD_DIR)Configuration.o $(BUILD_DIR)Network.o $(BUILD_DIR)main.o
+	g++ $(BUILD_DIR)DatagramTunneler.o $(BUILD_DIR)CommandLine.o $(BUILD_DIR)Configuration.o $(BUILD_DIR)Network.o $(BUILD_DIR)main.o -o $(BIN_DIR)datagramtunneler
 
-$(BUILD_DIR)main.o: $(SRC_DIR)main.cpp $(SRC_DIR)CommandLine.h $(SRC_DIR)Network.h $(BUILD_DIR)DatagramTunneler.o $(VERSION_FILE) directories
+$(BUILD_DIR)main.o: $(SRC_DIR)main.cpp $(SRC_DIR)CommandLine.h $(SRC_DIR)Configuration.h $(SRC_DIR)Network.h $(BUILD_DIR)DatagramTunneler.o $(VERSION_FILE) directories
 	g++ $(CPPFLAGS) -o $(BUILD_DIR)main.o -c $(SRC_DIR)main.cpp
 
 $(BUILD_DIR)CommandLine.o: $(SRC_DIR)CommandLine.h $(SRC_DIR)CommandLine.cpp $(SRC_DIR)DatagramTunneler.h $(VERSION_FILE) directories
 	g++ $(CPPFLAGS) -o $(BUILD_DIR)CommandLine.o -c $(SRC_DIR)CommandLine.cpp
+
+$(BUILD_DIR)Configuration.o: $(SRC_DIR)Configuration.h $(SRC_DIR)Configuration.cpp $(SRC_DIR)DatagramTunneler.h $(SRC_DIR)Network.h $(VERSION_FILE) directories
+	g++ $(CPPFLAGS) -o $(BUILD_DIR)Configuration.o -c $(SRC_DIR)Configuration.cpp
 
 $(BUILD_DIR)Network.o: $(SRC_DIR)Network.h $(SRC_DIR)Network.cpp directories
 	g++ $(CPPFLAGS) -o $(BUILD_DIR)Network.o -c $(SRC_DIR)Network.cpp

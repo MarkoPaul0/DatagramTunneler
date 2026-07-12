@@ -12,12 +12,12 @@
 Simple cross-platform client/server program forwarding UDP datagrams through a TCP connection (aka tunnel). The client joins a multicast group and forwards the received datagrams to the server, which in turns multicasts them on its own subnet.
 
 * Designed with simplicity in mind
-* Tested on *OSX 10.13.3*, *Ubuntu 16.04* and *Centos 7.4* 
-* **NOT** Windows compatible
+* Supported on current Linux, macOS, and Windows 10/11 releases
 
 ## Content
 [Requirements](#requirements)<br/>
 [Installation](#installation)<br/>
+[Named tunnels](#named-tunnels)<br/>
 [Synopsis](#synopsis)<br/>
 [Examples](#examples)<br/>
 [How does it work?](#how_it_works)<br/>
@@ -112,6 +112,47 @@ cmake -S . -B build-cmake -DBUILD_TESTING=ON
 cmake --build build-cmake
 ctest --test-dir build-cmake --output-on-failure
 ```
+
+<a name="named-tunnels"/>
+
+## Named tunnels
+
+For repeatable tunnel setups, store a named client or server definition in a versioned TOML configuration file. Create a documented starter file at the platform-default path:
+
+```
+dgramtunneler config init
+dgramtunneler config path
+dgramtunneler config edit
+```
+
+The default file is `~/Library/Application Support/DatagramTunneler/config.toml` on macOS, `$XDG_CONFIG_HOME/dgramtunneler/config.toml` (or `~/.config/dgramtunneler/config.toml`) on Linux, and `%APPDATA%\\DatagramTunneler\\config.toml` on Windows. Use `--config <path>` with any named-tunnel command to select another file.
+
+```toml
+version = 1
+
+[tunnels.office-client]
+mode = "client"
+udp_interface = "192.168.1.20"
+udp_group = "239.1.2.3:5000"
+tcp_server = "192.168.1.10:14052"
+
+[tunnels.office-server]
+mode = "server"
+udp_interface = "192.168.1.10"
+tcp_listen_port = 14052
+udp_destination = "239.1.2.4:5000"
+```
+
+Inspect and run a definition by alias:
+
+```
+dgramtunneler tunnel list
+dgramtunneler tunnel show office-client
+dgramtunneler tunnel validate office-client
+dgramtunneler tunnel run office-client
+```
+
+`config edit` creates the starter file if needed, then opens it using `$VISUAL`, `$EDITOR`, or the platform editor (`TextEdit` on macOS, `vi` on Linux, and Notepad on Windows). `tunnel validate` without an alias validates the entire file. The parser deliberately accepts only this schema and rejects unknown fields, duplicate aliases, invalid IPv4 addresses, and invalid ports. `tunnel run` runs in the foreground; service installation and background status management remain separate concerns.
 
 <a name="synopsis"/>
 
