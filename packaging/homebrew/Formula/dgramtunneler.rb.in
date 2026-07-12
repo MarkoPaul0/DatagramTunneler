@@ -1,0 +1,19 @@
+class Dgramtunneler < Formula
+  desc "Forward UDP multicast datagrams through a TCP tunnel"
+  homepage "https://github.com/MarkoPaul0/DatagramTunneler"
+  url "https://github.com/MarkoPaul0/DatagramTunneler/archive/refs/tags/@TAG@.tar.gz"
+  sha256 "@SHA256@"
+  license "GPL-3.0-only"
+
+  depends_on "cmake" => :build
+
+  def install
+    system "cmake", "-S", ".", "-B", "build", *std_cmake_args
+    system "cmake", "--build", "build"
+    system "cmake", "--install", "build"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/dgramtunneler --version")
+  end
+end

@@ -38,14 +38,29 @@ endif()
 
 install(TARGETS dgramtunneler
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES README.md LICENSE
+    DESTINATION "${CMAKE_INSTALL_DOCDIR}")
 
 set(CPACK_PACKAGE_NAME "dgramtunneler")
 set(CPACK_PACKAGE_VENDOR "DatagramTunneler contributors")
+set(CPACK_PACKAGE_CONTACT "DatagramTunneler contributors <noreply@github.com>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Forward UDP multicast datagrams through a TCP tunnel")
 set(CPACK_PACKAGE_FILE_NAME
     "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 set(CPACK_GENERATOR "TGZ;ZIP")
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND CPACK_GENERATOR DEB)
+    set(CPACK_DEBIAN_PACKAGE_NAME "dgramtunneler")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "net")
+    set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/MarkoPaul0/DatagramTunneler")
+    set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+endif()
+
 include(CPack)
 
 include(CTest)

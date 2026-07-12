@@ -74,6 +74,16 @@ cpack --config build-cmake/CPackConfig.cmake -B release-artifacts
 
 This produces `.tar.gz` and `.zip` archives named `dgramtunneler-<version>-<system>-<architecture>`. Each archive contains a top-level directory with `bin/dgramtunneler`.
 
+On Linux, CPack also produces a Debian package named `dgramtunneler_<version>-1_<architecture>.deb`. Install a downloaded package with:
+
+```
+sudo apt install ./dgramtunneler_<version>-1_<architecture>.deb
+```
+
+### Homebrew
+
+The Homebrew formula is maintained in a separate tap and must be pinned to a tagged source archive and its SHA-256 checksum. This repository includes the [formula template](packaging/homebrew/Formula/dgramtunneler.rb.in) and renderer used for each release. See [packaging/homebrew/README.md](packaging/homebrew/README.md) for the one-time tap setup and release procedure.
+
 ### Tests
 
 The CMake build includes unit tests for DTEP framing and command-line parsing, plus a loopback multicast tunnel round-trip test when Python 3 is available:

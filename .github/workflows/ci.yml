@@ -45,6 +45,12 @@ jobs:
       - name: Create release archives
         run: cpack --config build-cmake/CPackConfig.cmake -B release-artifacts
 
+      - name: Validate Debian package
+        if: matrix.name == 'ubuntu'
+        run: |
+          dpkg-deb --info release-artifacts/*.deb
+          dpkg-deb --contents release-artifacts/*.deb
+
       - name: Upload release archives
         uses: actions/upload-artifact@v4
         with:

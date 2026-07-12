@@ -9,6 +9,7 @@ bin/*
 /build-cmake/
 /install-test/
 /release-artifacts/
+/packaging/homebrew/Formula/dgramtunneler.rb
 
 # local planning notes
 _specs/
