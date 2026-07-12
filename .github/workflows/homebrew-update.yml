@@ -1,0 +1,90 @@
+name: Update Homebrew Formula
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish to the Homebrew tap (for example, v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  create-formula-pr:
+    name: Create Homebrew update PR
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      TAP_REPOSITORY: MarkoPaul0/homebrew-dgramtunneler
+
+    steps:
+      - name: Validate release tag and tap credentials
+        shell: bash
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must use vMAJOR.MINOR.PATCH, got: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          if [[ -z "$TAP_TOKEN" ]]; then
+            echo "HOMEBREW_TAP_TOKEN is required to open a pull request in $TAP_REPOSITORY." >&2
+            exit 1
+          fi
+
+      - name: Check out released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Render formula from immutable source archive
+        shell: bash
+        run: |
+          archive="dgramtunneler-${RELEASE_TAG}.tar.gz"
+          curl --fail --location --retry 3 --output "$archive" \
+            "https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${RELEASE_TAG}.tar.gz"
+          checksum="$(sha256sum "$archive" | awk '{print $1}')"
+          sh packaging/homebrew/render-formula.sh "$RELEASE_TAG" "$checksum"
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_REPOSITORY }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Create formula update pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          branch="automation/dgramtunneler-${RELEASE_TAG}"
+          existing_prs="$(gh pr list --repo "$TAP_REPOSITORY" --head "$branch" --state open --json url --jq 'length')"
+          if [[ "$existing_prs" != "0" ]]; then
+            echo "An open Homebrew update pull request already exists for $RELEASE_TAG."
+            exit 0
+          fi
+
+          mkdir -p tap/Formula
+          cp packaging/homebrew/Formula/dgramtunneler.rb tap/Formula/dgramtunneler.rb
+          git -C tap config user.name "github-actions[bot]"
+          git -C tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C tap switch -c "$branch"
+          git -C tap add Formula/dgramtunneler.rb
+          if git -C tap diff --cached --quiet; then
+            echo "The Homebrew formula already matches $RELEASE_TAG."
+            exit 0
+          fi
+          git -C tap commit -m "Update dgramtunneler to ${RELEASE_TAG}"
+          git -C tap push origin "HEAD:${branch}"
+          gh pr create \
+            --repo "$TAP_REPOSITORY" \
+            --base main \
+            --head "$branch" \
+            --title "Update dgramtunneler to ${RELEASE_TAG}" \
+            --body "Automated formula update for https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}."
