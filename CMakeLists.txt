@@ -18,6 +18,7 @@ include(GNUInstallDirs)
 add_executable(dgramtunneler
     src/main.cpp
     src/CommandLine.cpp
+    src/Network.cpp
     src/DatagramTunneler.cpp)
 
 target_compile_features(dgramtunneler PRIVATE cxx_std_11)
@@ -34,6 +35,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
         -Wreorder
         -Wold-style-cast
         -Werror)
+endif()
+
+if(WIN32)
+    target_link_libraries(dgramtunneler PRIVATE ws2_32)
 endif()
 
 install(TARGETS dgramtunneler
@@ -68,6 +73,7 @@ if(BUILD_TESTING)
     add_executable(dgramtunneler_unit_tests
         tests/unit_tests.cpp
         src/CommandLine.cpp
+        src/Network.cpp
         src/DatagramTunneler.cpp)
     target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_11)
     set_target_properties(dgramtunneler_unit_tests PROPERTIES
@@ -82,6 +88,10 @@ if(BUILD_TESTING)
             -Wreorder
             -Wold-style-cast
             -Werror)
+    endif()
+
+    if(WIN32)
+        target_link_libraries(dgramtunneler_unit_tests PRIVATE ws2_32)
     endif()
 
     add_test(NAME unit_tests COMMAND dgramtunneler_unit_tests)

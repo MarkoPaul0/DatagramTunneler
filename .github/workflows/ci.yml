@@ -59,17 +59,23 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  windows-readiness:
-    name: Windows readiness
+  windows-build:
+    name: Build and smoke test (windows)
     runs-on: windows-latest
 
     steps:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Configure CMake with MSVC
-        run: cmake -S . -B build-cmake
+      - name: Configure CMake
+        run: cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
 
-      - name: Record current compatibility boundary
+      - name: Build with CMake
+        run: cmake --build build-cmake --config Release
+
+      - name: Smoke test executable
         shell: pwsh
-        run: Write-Host "::notice title=Windows support pending::The source still uses POSIX socket and getopt APIs. Task 6 will make this job build and package the Windows executable."
+        run: .\build-cmake\Release\dgramtunneler.exe --version
+
+      - name: Run portable CTest checks
+        run: ctest --test-dir build-cmake -C Release --output-on-failure -R "unit_tests|version_command"

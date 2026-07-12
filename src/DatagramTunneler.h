@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+#include "Network.h"
+
 class DatagramTunneler {
 public:
     struct Config {
@@ -43,6 +45,6 @@ private:
 
     // Member variables
     Config          cfg_;
-    int             udp_socket_;    // Used by the client to read udp data or by the server to publish data
-    int             tcp_socket_;    // Used by the client to connect to server, by the server to listen for a client
+    SocketHandle    udp_socket_;    // Used by the client to read udp data or by the server to publish data
+    SocketHandle    tcp_socket_;    // Used by the client to connect to server, by the server to listen for a client
 };

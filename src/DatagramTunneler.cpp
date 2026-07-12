@@ -1,34 +1,24 @@
 #include "DatagramTunneler.h"
 
-#include <arpa/inet.h>
 #include <assert.h>
-#include <cerrno>
 #include <cstdint>
 #include <cstring>
-#include <netinet/in.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include "Log.h"
+#include "Network.h"
 #include "Protocol.h"
-
-#ifndef MSG_NOSIGNAL
-// MSG_NOSIGNAL is posix but somehow not portable (undefined on OSX)
-#define MSG_NOSIGNAL 0 // 0 = no flags
-#endif
 
 static const int NO_FLAGS = 0;
 static const int HEARTBEAT_PERIOD_SEC = 5;   // Client will send tunnel at least 1 packet every 5 seconds wether or not a datagram is received
 
 
-// This method is local to this cpp file, and simply does what its name suggests. Returns false if it fails and sets errno
-static bool sendTCPData(int tcp_socket, const void* data, size_t datalen, int flags) {
+// This method is local to this cpp file and sends the entire buffer over TCP.
+static bool sendTCPData(SocketHandle tcp_socket, const void* data, size_t datalen, int flags) {
     size_t len_to_send = datalen;
     const char* p = reinterpret_cast<const char*>(data);
     do {
-        ssize_t len_sent = 0;
-        if((len_sent = send(tcp_socket, p, len_to_send, flags)) < 0) {
+        SocketIoSize len_sent = 0;
+        if((len_sent = send(tcp_socket, p, static_cast<SocketBufferLength>(len_to_send), flags)) < 0) {
             return false;
         }
         if (len_sent == 0) {
@@ -87,14 +77,13 @@ void DatagramTunneler::run() {
 void DatagramTunneler::setupClient(const Config& cfg) {
     // Creating UDP socket
     udp_socket_ = socket(AF_INET, SOCK_DGRAM, NO_FLAGS);
-    if (udp_socket_ < 0) {
-        DEATH("Could not create UDP socket! Error %d", errno);
+    if (isInvalidSocket(udp_socket_)) {
+        DEATH("Could not create UDP socket! Error %d", lastSocketError());
     }
 
     // Setting timeout on UDP socket so as to send data to server at least every HEARTBEAT_PERIOD_SEC seconds
-    struct timeval tv {HEARTBEAT_PERIOD_SEC, 0};
-    if (setsockopt(udp_socket_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-        DEATH("Could not set receive timeout on UDP socket! Error %d", errno);
+    if (!setSocketReceiveTimeout(udp_socket_, HEARTBEAT_PERIOD_SEC)) {
+        DEATH("Could not set receive timeout on UDP socket! Error %d", lastSocketError());
     }
 
     // Binding UDP socket to configured port
@@ -104,23 +93,23 @@ void DatagramTunneler::setupClient(const Config& cfg) {
     bind_addr.sin_port = htons(cfg.udp_dst_port_);
     bind_addr.sin_addr.s_addr = INADDR_ANY;
     if(bind(udp_socket_, reinterpret_cast<sockaddr*>(&bind_addr), sizeof(bind_addr)) < 0) {
-        DEATH("Could not bind UDP socket to port %u!", cfg.udp_dst_port_);
+        DEATH("Could not bind UDP socket to port %u! Error %d", cfg.udp_dst_port_, lastSocketError());
     }
 
     // Creating TCP socket
     tcp_socket_ = socket(AF_INET , SOCK_STREAM , NO_FLAGS);
-    if (tcp_socket_ < 0) {
-        DEATH("Could not create TCP socket!");
+    if (isInvalidSocket(tcp_socket_)) {
+        DEATH("Could not create TCP socket! Error %d", lastSocketError());
     }
 
     //OSX only
 #ifdef __APPLE__
     // If the TCP server crashes, the client will just exit abruptly because the client socket sends
-    // a sigpipe signal when invoking send() instead of returning -1 and setting the errno
+    // a sigpipe signal when invoking send() instead of returning an error
     // on other distributions, we use MSG_NOSIGNAL when invoking send()
     int set = 1;
-    if (setsockopt(tcp_socket_, SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set)) < 0) {
-        DEATH("Could not prevent TCP socket to send SIGPIPE on disconnect! Error %d", errno);
+    if (setSocketOption(tcp_socket_, SOL_SOCKET, SO_NOSIGPIPE, set) < 0) {
+        DEATH("Could not prevent TCP socket to send SIGPIPE on disconnect! Error %d", lastSocketError());
     }
 #endif
 }
@@ -128,13 +117,13 @@ void DatagramTunneler::setupClient(const Config& cfg) {
 
 void DatagramTunneler::runClient() {
     // Connect to TCP server
-    sockaddr_in server_addr;
+    sockaddr_in server_addr {};
     //TODO: set a tcp interface ip!
     server_addr.sin_addr.s_addr = inet_addr(cfg_.tcp_srv_ip_.c_str());
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(cfg_.tcp_srv_port_);
     if (connect(tcp_socket_, reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)) < 0) {
-        DEATH("Unable to connect to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, errno);
+        DEATH("Unable to connect to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, lastSocketError());
     }
     INFO("[DatagramTunneler][CLIENT-MODE] connected to TCP remote %s:%u and listening to multicast %s:%u",
     cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
@@ -143,8 +132,8 @@ void DatagramTunneler::runClient() {
     ip_mreq udp_group;
     udp_group.imr_multiaddr.s_addr = inet_addr(cfg_.udp_dst_ip_.c_str());
     udp_group.imr_interface.s_addr = inet_addr(cfg_.udp_iface_ip_.c_str());
-    if(setsockopt(udp_socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &udp_group, sizeof(udp_group)) < 0) {
-        DEATH("Could not join multicast group %s:%u. Error %d", cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_, errno);
+    if(setSocketOption(udp_socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, udp_group) < 0) {
+        DEATH("Could not join multicast group %s:%u. Error %d", cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_, lastSocketError());
     }
     INFO("Joined multicast group %s:%u.", cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
 
@@ -152,31 +141,36 @@ void DatagramTunneler::runClient() {
     TunnelPacket tunnel_pkt;
     inet_pton(AF_INET, cfg_.udp_dst_ip_.c_str(), &tunnel_pkt.udp_dst_ip_);
     tunnel_pkt.udp_dst_port_ = cfg_.udp_dst_port_;
-    ssize_t len_read = 0;
+    SocketIoSize len_read = 0;
     // Running loop
     while (true) {
         // Read datagram from udp socket
-        if((len_read = recv(udp_socket_, tunnel_pkt.databuf_, kMaxDatagramLength, MSG_TRUNC)) < 0) {
+        if((len_read = recv(udp_socket_, tunnel_pkt.databuf_, static_cast<SocketBufferLength>(kMaxDatagramLength), kReceiveTruncationFlag)) < 0) {
             //TODO: handle errors and edge cases such as jumbo frames
-            if (errno != EAGAIN) {
-                DEATH("Unable to read data from UDP socket %d", errno);
+            const int error_code = lastSocketError();
+            if (isDatagramTooLargeError(error_code)) {
+                WARN("Discarding jumbo datagram.");
+                continue;
+            }
+            if (!isReceiveTimeout(error_code)) {
+                DEATH("Unable to read data from UDP socket %d", error_code);
             }
             tunnel_pkt.type_ = TunnelPacketType::Heartbeat;
             INFO("Sending a heartbeat to server.");
         } else {
-            assert(len_read <= static_cast<ssize_t>(kMaxDatagramLength));
-            if (len_read > static_cast<ssize_t>(kMaxDatagramLength)) { //this is possible because we are using MSG_TRUNC flag
-                WARN("Discarding jumbo datagram of %zd bytes!", len_read);
+            assert(len_read <= static_cast<SocketIoSize>(kMaxDatagramLength));
+            if (len_read > static_cast<SocketIoSize>(kMaxDatagramLength)) { //this is possible because we are using MSG_TRUNC flag
+                WARN("Discarding jumbo datagram of %zu bytes!", static_cast<size_t>(len_read));
                 continue;
             }
             tunnel_pkt.type_ = TunnelPacketType::Datagram;
-            INFO("Tunneling a %zd byte datagram to server.", len_read);
+            INFO("Tunneling a %zu byte datagram to server.", static_cast<size_t>(len_read));
             tunnel_pkt.datalen_ = static_cast<uint16_t>(len_read);
         }
 
         // Send the encapsulated datagram to the server over the TCP connection
-        if(!sendTCPData(tcp_socket_, &tunnel_pkt, tunnel_pkt.size(), NO_FLAGS)) {
-            DEATH("Unable to send data to server! Error %d", errno);
+        if(!sendTCPData(tcp_socket_, &tunnel_pkt, tunnel_pkt.size(), kNoSignalFlag)) {
+            DEATH("Unable to send data to server! Error %d", lastSocketError());
         }
     }
 }
@@ -189,30 +183,30 @@ void DatagramTunneler::runClient() {
 void DatagramTunneler::setupServer(const Config& cfg) {
     // Creating UDP socket
     udp_socket_ = socket(AF_INET, SOCK_DGRAM, NO_FLAGS);
-    if (udp_socket_ < 0) {
-        DEATH("Could not create UDP socket! Error %d", errno);
+    if (isInvalidSocket(udp_socket_)) {
+        DEATH("Could not create UDP socket! Error %d", lastSocketError());
     }
 
     // Setting up the UDP publishing interface
     in_addr iface;
     iface.s_addr = inet_addr(cfg_.udp_iface_ip_.c_str());
-    if(setsockopt(udp_socket_, IPPROTO_IP, IP_MULTICAST_IF, &iface, sizeof(iface)) < 0) {
-        DEATH("Could not set UDP publisher interface to %s! Error %d", cfg_.udp_iface_ip_.c_str(), errno);
+    if(setSocketOption(udp_socket_, IPPROTO_IP, IP_MULTICAST_IF, iface) < 0) {
+        DEATH("Could not set UDP publisher interface to %s! Error %d", cfg_.udp_iface_ip_.c_str(), lastSocketError());
     }
 
     // Creating TCP socket
     tcp_socket_ = socket(AF_INET , SOCK_STREAM , NO_FLAGS);
-    if (tcp_socket_ < 0) {
-        DEATH("Could not create TCP socket! Error %d", errno);
+    if (isInvalidSocket(tcp_socket_)) {
+        DEATH("Could not create TCP socket! Error %d", lastSocketError());
     }
 
     // Binding the TCP socket
-    sockaddr_in tcp_iface;
+    sockaddr_in tcp_iface {};
     tcp_iface.sin_family = AF_INET;
     tcp_iface.sin_port = htons (cfg_.tcp_srv_port_);
     tcp_iface.sin_addr.s_addr = htonl(INADDR_ANY); //TODO: review that
     if(bind(tcp_socket_, reinterpret_cast<sockaddr*>(&tcp_iface), sizeof(tcp_iface)) < 0) {
-        DEATH("Could not bind TCP socket to port %u! Error %d", cfg.tcp_srv_port_, errno);
+        DEATH("Could not bind TCP socket to port %u! Error %d", cfg.tcp_srv_port_, lastSocketError());
     }
 }
 
@@ -221,20 +215,19 @@ void DatagramTunneler::runServer() {
     INFO("[DatagramTunneler][SERVER MODE] listening for client connection on port %u...", cfg_.tcp_srv_port_);
     //Listening for client connection and accepting connection
     if (listen(tcp_socket_, 1) < 0) {
-        DEATH("Unable to listen on TCP port %u, error %d!", cfg_.tcp_srv_port_, errno);
+        DEATH("Unable to listen on TCP port %u, error %d!", cfg_.tcp_srv_port_, lastSocketError());
     }
     sockaddr remote;
-    socklen_t sosize  = sizeof(remote);
-    int new_fd = accept(tcp_socket_, &remote, &sosize);
-    if (new_fd < 0) {
-        DEATH("Unable to accept incoming TCP connection, accept() error %d!", errno);
+    SocketAddressLength sosize  = sizeof(remote);
+    SocketHandle new_fd = accept(tcp_socket_, &remote, &sosize);
+    if (isInvalidSocket(new_fd)) {
+        DEATH("Unable to accept incoming TCP connection, accept() error %d!", lastSocketError());
     }
     INFO("Accepted incoming connection from a remote host. Waiting for forwarded datagrams...");
 
     // Setting up TCP timeout HEARTBEAT_PERIOD_SEC + 1 second
-    struct timeval tv {HEARTBEAT_PERIOD_SEC + 1, 0};
-    if (setsockopt(new_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-        DEATH("Could not set receive timeout on TCP socket! Error %d", errno);
+    if (!setSocketReceiveTimeout(new_fd, HEARTBEAT_PERIOD_SEC + 1)) {
+        DEATH("Could not set receive timeout on TCP socket! Error %d", lastSocketError());
     }
 
     sockaddr_in pub_group;
@@ -247,17 +240,17 @@ void DatagramTunneler::runServer() {
 
     TunnelPacket tunnel_pkt;
     char* p = reinterpret_cast<char*>(&tunnel_pkt); //a write pointer
-    ssize_t len_read = 0;
+    SocketIoSize len_read = 0;
     size_t len_to_read = 1;
     while(true) {
         assert(len_to_read != 0);
         // Reading data sent from client
-        if ((len_read = recv(new_fd, p, len_to_read, NO_FLAGS)) < 0) {
-            if (errno == EAGAIN) {
+        if ((len_read = recv(new_fd, p, static_cast<SocketBufferLength>(len_to_read), kNoSignalFlag)) < 0) {
+            if (isReceiveTimeout(lastSocketError())) {
                 INFO("Client has been silent for too long. Terminating");
                 exit(0);
             } else {
-                DEATH("Unable to read data from TCP socket, recv() error %d!", errno);
+                DEATH("Unable to read data from TCP socket, recv() error %d!", lastSocketError());
             }
         }
         if (len_read == 0) {
@@ -292,8 +285,8 @@ void DatagramTunneler::runServer() {
         }
 
         // Multicasting the datagrams received from the client
-        if(sendto(udp_socket_, tunnel_pkt.databuf_, tunnel_pkt.datalen_, MSG_NOSIGNAL, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
-            DEATH("Unable to publish multicast data, sendto() error %d!", errno);
+        if(sendto(udp_socket_, tunnel_pkt.databuf_, tunnel_pkt.datalen_, kNoSignalFlag, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
+            DEATH("Unable to publish multicast data, sendto() error %d!", lastSocketError());
         }
 
         //Getting group on which the datagram was published on client side

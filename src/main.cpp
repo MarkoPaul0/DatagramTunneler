@@ -2,6 +2,7 @@
 
 #include "CommandLine.h"
 #include "Log.h"
+#include "Network.h"
 
 #ifndef DGRAMTUNNELER_VERSION
 #define DGRAMTUNNELER_VERSION "development"
@@ -26,6 +27,12 @@ int main(int argc, char* argv[]) {
     if (argc == 2 && (std::string(argv[1]) == "--version" || std::string(argv[1]) == "-V")) {
         printVersion();
         return 0;
+    }
+
+    int network_error = 0;
+    if (!initializeNetwork(&network_error)) {
+        ERROR("Could not initialize network support. Error %d", network_error);
+        return 1;
     }
 
     // Parse command line config
