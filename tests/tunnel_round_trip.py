@@ -56,6 +56,11 @@ def main():
             executable, "--server", "-i", LOOPBACK, "-t", str(tcp_port),
             "-u", "{}:{}".format(OUTPUT_GROUP, output_port),
         ])
+        # The client exits immediately when a TCP connection is refused, so give
+        # the server process time to bind and begin listening before launching it.
+        time.sleep(0.25)
+        if server.poll() is not None:
+            raise RuntimeError("server exited before accepting a client")
         client = subprocess.Popen([
             executable, "--client", "-i", LOOPBACK,
             "-t", "{}:{}".format(LOOPBACK, tcp_port),
