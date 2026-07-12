@@ -13,7 +13,7 @@ brew install dgramtunneler
 
 ## Per-release update
 
-1. Update `VERSION`, commit it, publish the matching Git tag such as `v1.1.0`, and create the GitHub Release.
+1. Update `VERSION`, commit it, and publish the matching Git tag such as `v1.1.0`. The tag-triggered release workflow validates the version and creates the GitHub Release.
 2. Download the source archive and calculate its checksum:
 
    ```sh

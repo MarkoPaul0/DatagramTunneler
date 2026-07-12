@@ -124,6 +124,19 @@ This produces `.tar.gz` and `.zip` archives named `dgramtunneler-<version>-<syst
 
 For Homebrew updates, use the [tap release procedure](packaging/homebrew/README.md).
 
+## Publish a release
+
+Pushing a semantic-version tag automatically validates the matching `VERSION` file, builds and tests release packages on macOS, Ubuntu, and Windows, creates the GitHub Release, uploads the artifacts, and attaches a `SHA256SUMS` file.
+
+After merging the version bump to `master`:
+
+```sh
+git tag -a v<version> -m "DatagramTunneler <version>"
+git push origin v<version>
+```
+
+The tag must exactly match `VERSION`: for example, `VERSION` `1.1.0` requires tag `v1.1.0`.
+
 ## Tests
 
 The test suite covers protocol framing, command and configuration parsing, named-tunnel commands, and a loopback multicast round-trip test when Python 3 is available.

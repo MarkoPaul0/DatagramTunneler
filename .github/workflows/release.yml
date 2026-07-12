@@ -1,0 +1,160 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-version:
+    name: Verify release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate tag and VERSION
+        id: version
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="$(tr -d '\r\n' < VERSION)"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must use vMAJOR.MINOR.PATCH, got: $tag" >&2
+            exit 1
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION must use MAJOR.MINOR.PATCH, got: $version" >&2
+            exit 1
+          fi
+          if [[ "$tag" != "v$version" ]]; then
+            echo "Release tag $tag does not match VERSION $version" >&2
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+  build-unix:
+    name: Build release (${{ matrix.name }})
+    needs: verify-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu
+            os: ubuntu-latest
+          - name: macos
+            os: macos-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build with CMake
+        run: cmake --build build-cmake --config Release
+
+      - name: Run CTest suite
+        run: ctest --test-dir build-cmake --output-on-failure
+
+      - name: Create release archives
+        run: cpack --config build-cmake/CPackConfig.cmake -B release-artifacts
+
+      - name: Validate Debian package
+        if: matrix.name == 'ubuntu'
+        run: |
+          dpkg-deb --info release-artifacts/*.deb
+          dpkg-deb --contents release-artifacts/*.deb
+
+      - name: Upload release archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.name }}
+          path: release-artifacts/*
+          if-no-files-found: error
+
+  build-windows:
+    name: Build release (windows)
+    needs: verify-version
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build with CMake
+        run: cmake --build build-cmake --config Release
+
+      - name: Run portable CTest checks
+        run: ctest --test-dir build-cmake -C Release --output-on-failure -R "unit_tests|version_command|config_path_command|tunnel_list_command"
+
+      - name: Create Windows ZIP
+        run: cpack -G ZIP --config build-cmake/CPackConfig.cmake -B release-artifacts
+
+      - name: Verify Windows ZIP
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem release-artifacts -Filter '*.zip'
+          if ($archive.Count -ne 1) { throw 'Expected exactly one Windows ZIP artifact.' }
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath extracted-artifact -Force
+          $binary = Get-ChildItem extracted-artifact -Filter dgramtunneler.exe -Recurse
+          if ($binary.Count -ne 1) { throw 'Windows ZIP does not contain dgramtunneler.exe.' }
+          & $binary.FullName --version
+
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: release-artifacts/*.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - verify-version
+      - build-unix
+      - build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-artifacts
+
+      - name: Generate checksums
+        shell: bash
+        working-directory: release-artifacts
+        run: |
+          find . -type f -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -d '' artifacts < <(find release-artifacts -type f -print0)
+          if [[ "${#artifacts[@]}" -eq 0 ]]; then
+            echo "No release artifacts were downloaded." >&2
+            exit 1
+          fi
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --title "DatagramTunneler ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            "${artifacts[@]}"
