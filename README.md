@@ -128,6 +128,8 @@ For Homebrew updates, use the [tap release procedure](packaging/homebrew/README.
 
 Pushing a semantic-version tag automatically validates the matching `VERSION` file, builds and tests release packages on macOS, Ubuntu, and Windows, creates the GitHub Release, uploads the artifacts, and attaches a `SHA256SUMS` file.
 
+When the Homebrew tap automation is configured, publishing the release also opens a reviewed formula-update pull request in the tap. See the [tap release procedure](packaging/homebrew/README.md) for the one-time credential setup.
+
 After merging the version bump to `master`:
 
 ```sh
