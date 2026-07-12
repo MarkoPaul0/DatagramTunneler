@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <utility>
 
 #ifdef _WIN32
 
@@ -26,6 +27,7 @@ constexpr int kNoSignalFlag = 0;
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 using SocketHandle = int;
 using SocketIoSize = ssize_t;
@@ -42,6 +44,53 @@ constexpr int kNoSignalFlag = 0;
 #endif
 
 bool initializeNetwork(int* error_code);
+
+inline void closeSocket(SocketHandle socket) {
+    if (socket == kInvalidSocket) {
+        return;
+    }
+#ifdef _WIN32
+    closesocket(socket);
+#else
+    close(socket);
+#endif
+}
+
+class Socket {
+public:
+    Socket() = default;
+    explicit Socket(SocketHandle socket) : socket_(socket) {}
+    ~Socket() { reset(); }
+
+    Socket(const Socket&) = delete;
+    Socket& operator=(const Socket&) = delete;
+
+    Socket(Socket&& other) noexcept : socket_(other.release()) {}
+
+    Socket& operator=(Socket&& other) noexcept {
+        if (this != &other) {
+            reset(other.release());
+        }
+        return *this;
+    }
+
+    SocketHandle get() const { return socket_; }
+    bool valid() const { return socket_ != kInvalidSocket; }
+
+    SocketHandle release() {
+        const SocketHandle socket = socket_;
+        socket_ = kInvalidSocket;
+        return socket;
+    }
+
+    void reset(SocketHandle socket = kInvalidSocket) {
+        closeSocket(socket_);
+        socket_ = socket;
+    }
+
+private:
+    SocketHandle socket_ = kInvalidSocket;
+};
 
 inline bool isInvalidSocket(SocketHandle socket) {
     return socket == kInvalidSocket;

@@ -21,7 +21,7 @@ add_executable(dgramtunneler
     src/Network.cpp
     src/DatagramTunneler.cpp)
 
-target_compile_features(dgramtunneler PRIVATE cxx_std_11)
+target_compile_features(dgramtunneler PRIVATE cxx_std_20)
 target_compile_definitions(dgramtunneler PRIVATE
     DGRAMTUNNELER_VERSION="${PROJECT_VERSION}")
 set_target_properties(dgramtunneler PROPERTIES
@@ -75,7 +75,7 @@ if(BUILD_TESTING)
         src/CommandLine.cpp
         src/Network.cpp
         src/DatagramTunneler.cpp)
-    target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_11)
+    target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_20)
     set_target_properties(dgramtunneler_unit_tests PROPERTIES
         CXX_EXTENSIONS OFF)
     target_include_directories(dgramtunneler_unit_tests PRIVATE src)

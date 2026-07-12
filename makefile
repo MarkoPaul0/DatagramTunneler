@@ -1,6 +1,6 @@
 VERSION_FILE=VERSION
 VERSION=$(shell tr -d '\n' < $(VERSION_FILE))
-CPPFLAGS=-std=c++11 -Wall -Wconversion -Wsign-compare -Wreorder -Wold-style-cast -Werror -DDGRAMTUNNELER_VERSION=\"$(VERSION)\" #-Wpedantic #TODO: make compiler as strict as possible
+CPPFLAGS=-std=c++20 -Wall -Wconversion -Wsign-compare -Wreorder -Wold-style-cast -Werror -DDGRAMTUNNELER_VERSION=\"$(VERSION)\" #-Wpedantic #TODO: make compiler as strict as possible
 RM=rm -f
 SRC_DIR=src/
 BUILD_DIR=build/

@@ -1,4 +1,5 @@
 #include <string>
+#include <utility>
 
 #include "CommandLine.h"
 #include "Log.h"
@@ -43,7 +44,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Create and run the datagram tunneler with the parsed config
-    DatagramTunneler tunneler(cfg);
+    DatagramTunneler tunneler(std::move(cfg));
     tunneler.run();
 
     INFO("Exiting program");

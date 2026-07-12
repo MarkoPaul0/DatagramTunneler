@@ -28,7 +28,7 @@ Simple cross-platform client/server program forwarding UDP datagrams through a T
 
 ## Requirements
 * A computer running Linux, macOS, or Windows 10/11
-* A c++ compiler
+* A C++20-capable compiler
 * CMake 3.16 or later for the supported build and release workflow
 
 <a name="installation"/>
