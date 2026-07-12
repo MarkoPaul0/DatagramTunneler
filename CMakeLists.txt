@@ -106,6 +106,11 @@ if(BUILD_TESTING)
     set_tests_properties(config_path_command PROPERTIES
         PASS_REGULAR_EXPRESSION "named-tunnels\\.toml")
 
+    add_test(NAME tunnel_list_command
+        COMMAND dgramtunneler tunnel list --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml")
+    set_tests_properties(tunnel_list_command PROPERTIES
+        PASS_REGULAR_EXPRESSION "Alias[ \\t]+Type[ \\t]+Equivalent direct command")
+
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME tunnel_round_trip

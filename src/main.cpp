@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cerrno>
 #include <cctype>
 #include <cstdlib>
@@ -173,6 +174,52 @@ const char* modeName(const NamedTunnel& tunnel) {
     return tunnel.config.is_client_ ? "client" : "server";
 }
 
+std::string endpoint(const std::string& address, uint16_t port) {
+    return address + ":" + std::to_string(port);
+}
+
+std::string directCommand(const NamedTunnel& tunnel) {
+    const DatagramTunneler::Config& config = tunnel.config;
+    if (config.is_client_) {
+        return "dgramtunneler --client -i " + config.udp_iface_ip_ + " -t " +
+               endpoint(config.tcp_srv_ip_, config.tcp_srv_port_) + " -u " +
+               endpoint(config.udp_dst_ip_, config.udp_dst_port_);
+    }
+
+    std::string command = "dgramtunneler --server -i " + config.udp_iface_ip_ +
+                          " -t " + std::to_string(config.tcp_srv_port_);
+    if (!config.use_clt_grp_) {
+        command += " -u " + endpoint(config.udp_dst_ip_, config.udp_dst_port_);
+    }
+    return command;
+}
+
+void printTunnelList(const TunnelConfiguration& configuration) {
+    struct TunnelRow {
+        std::string alias;
+        std::string type;
+        std::string command;
+    };
+
+    std::vector<TunnelRow> rows;
+    std::size_t alias_width = std::string("Alias").size();
+    std::size_t type_width = std::string("Type").size();
+    for (const NamedTunnel& tunnel : configuration.tunnels) {
+        TunnelRow row = {tunnel.alias, modeName(tunnel), directCommand(tunnel)};
+        alias_width = std::max(alias_width, row.alias.size());
+        type_width = std::max(type_width, row.type.size());
+        rows.push_back(std::move(row));
+    }
+
+    const int alias_padding = static_cast<int>(alias_width);
+    const int type_padding = static_cast<int>(type_width);
+    printf("%-*s  %-*s  %s\n", alias_padding, "Alias", type_padding, "Type", "Equivalent direct command");
+    printf("%-*s  %-*s  %s\n", alias_padding, "-----", type_padding, "----", "-------------------------");
+    for (const TunnelRow& row : rows) {
+        printf("%-*s  %-*s  %s\n", alias_padding, row.alias.c_str(), type_padding, row.type.c_str(), row.command.c_str());
+    }
+}
+
 void printTunnel(const NamedTunnel& tunnel) {
     printf("%s (%s)\n", tunnel.alias.c_str(), modeName(tunnel));
     printf("  udp_interface = %s\n", tunnel.config.udp_iface_ip_.c_str());
@@ -226,9 +273,7 @@ int runTunnelCommand(int argc, char* argv[]) {
             throw std::runtime_error("tunnel list does not accept an alias");
         }
         const TunnelConfiguration configuration = loadConfiguration(arguments.config_path);
-        for (const NamedTunnel& tunnel : configuration.tunnels) {
-            printf("%s\t%s\n", tunnel.alias.c_str(), modeName(tunnel));
-        }
+        printTunnelList(configuration);
         return 0;
     }
 
