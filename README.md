@@ -38,13 +38,22 @@ Simple cross-platform client/server program forwarding UDP datagrams through a T
 ```
 cd <path_to_the_repo>/DatagramTunneler
 ```
-* Build the DatagramTunneler by simply running make:
+* Build with CMake (requires CMake 3.16 or later):
+```
+cmake -S . -B build-cmake
+cmake --build build-cmake
+```
+* To display its invocation syntax, run:
+```
+./build-cmake/dgramtunneler
+```
+* The existing Makefile build remains available during the migration:
 ```
 make
 ```
-* You're ready to run the DatagramTunneler binary:
+* To display its invocation syntax, run:
 ```
-./bin/DatagramTunneler -h
+./bin/datagramtunneler
 ```
 For more info about how to run it, checkout the *Synopsis below*
 

@@ -3,3 +3,10 @@
 
 # ignore bin folder
 bin/*
+
+# ignore local build directories
+/build/
+/build-cmake/
+
+# local planning notes
+_specs/
