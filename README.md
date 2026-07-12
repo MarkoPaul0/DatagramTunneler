@@ -84,6 +84,25 @@ sudo apt install ./dgramtunneler_<version>-1_<architecture>.deb
 
 The Homebrew formula is maintained in a separate tap and must be pinned to a tagged source archive and its SHA-256 checksum. This repository includes the [formula template](packaging/homebrew/Formula/dgramtunneler.rb.in) and renderer used for each release. See [packaging/homebrew/README.md](packaging/homebrew/README.md) for the one-time tap setup and release procedure.
 
+### Windows 10 and 11
+
+The CI workflow builds and tests Windows ZIP artifacts on `windows-2022` and the current `windows-latest` runner. Download the appropriate `dgramtunneler-windows-*` ZIP artifact from the CI run, then use PowerShell to extract and run it:
+
+```powershell
+$archive = Get-ChildItem $HOME\Downloads\dgramtunneler-*.zip | Select-Object -First 1
+$destination = Join-Path $env:LOCALAPPDATA 'DatagramTunneler'
+Expand-Archive -LiteralPath $archive.FullName -DestinationPath $destination -Force
+$binary = Get-ChildItem $destination -Filter dgramtunneler.exe -Recurse | Select-Object -First 1
+& $binary.FullName --version
+```
+
+To use it by name for the current PowerShell session:
+
+```powershell
+$env:Path += ";$($binary.DirectoryName)"
+dgramtunneler.exe --version
+```
+
 ### Tests
 
 The CMake build includes unit tests for DTEP framing and command-line parsing, plus a loopback multicast tunnel round-trip test when Python 3 is available:

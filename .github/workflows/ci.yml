@@ -60,8 +60,16 @@ jobs:
           retention-days: 14
 
   windows-build:
-    name: Build and smoke test (windows)
-    runs-on: windows-latest
+    name: Build and package (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-2022
+            os: windows-2022
+          - name: windows-latest
+            os: windows-latest
 
     steps:
       - name: Check out source
@@ -79,3 +87,24 @@ jobs:
 
       - name: Run portable CTest checks
         run: ctest --test-dir build-cmake -C Release --output-on-failure -R "unit_tests|version_command"
+
+      - name: Create Windows ZIP
+        run: cpack -G ZIP --config build-cmake/CPackConfig.cmake -B release-artifacts
+
+      - name: Verify Windows ZIP
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem release-artifacts -Filter '*.zip'
+          if ($archive.Count -ne 1) { throw 'Expected exactly one Windows ZIP artifact.' }
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath extracted-artifact -Force
+          $binary = Get-ChildItem extracted-artifact -Filter dgramtunneler.exe -Recurse
+          if ($binary.Count -ne 1) { throw 'Windows ZIP does not contain dgramtunneler.exe.' }
+          & $binary.FullName --version
+
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: dgramtunneler-${{ matrix.name }}
+          path: release-artifacts/*.zip
+          if-no-files-found: error
+          retention-days: 14
