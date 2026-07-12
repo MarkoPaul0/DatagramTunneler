@@ -6,9 +6,9 @@ bin/*
 
 # ignore local build directories
 /build/
-/build-cmake/
+/build-*/
 /install-test/
-/release-artifacts/
+/release-artifacts*/
 /packaging/homebrew/Formula/dgramtunneler.rb
 
 # local planning notes
