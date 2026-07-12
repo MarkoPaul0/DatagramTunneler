@@ -17,6 +17,7 @@ include(GNUInstallDirs)
 
 add_executable(dgramtunneler
     src/main.cpp
+    src/CommandLine.cpp
     src/DatagramTunneler.cpp)
 
 target_compile_features(dgramtunneler PRIVATE cxx_std_11)
@@ -46,3 +47,37 @@ set(CPACK_PACKAGE_FILE_NAME
 set(CPACK_GENERATOR "TGZ;ZIP")
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
 include(CPack)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(dgramtunneler_unit_tests
+        tests/unit_tests.cpp
+        src/CommandLine.cpp
+        src/DatagramTunneler.cpp)
+    target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_11)
+    set_target_properties(dgramtunneler_unit_tests PROPERTIES
+        CXX_EXTENSIONS OFF)
+    target_include_directories(dgramtunneler_unit_tests PRIVATE src)
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
+        target_compile_options(dgramtunneler_unit_tests PRIVATE
+            -Wall
+            -Wconversion
+            -Wsign-compare
+            -Wreorder
+            -Wold-style-cast
+            -Werror)
+    endif()
+
+    add_test(NAME unit_tests COMMAND dgramtunneler_unit_tests)
+    add_test(NAME version_command COMMAND dgramtunneler --version)
+    set_tests_properties(version_command PROPERTIES
+        PASS_REGULAR_EXPRESSION "dgramtunneler [0-9]+\\.[0-9]+\\.[0-9]+")
+
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME tunnel_round_trip
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tunnel_round_trip.py" "$<TARGET_FILE:dgramtunneler>")
+        set_tests_properties(tunnel_round_trip PROPERTIES TIMEOUT 15)
+    endif()
+endif()

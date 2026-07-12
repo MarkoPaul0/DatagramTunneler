@@ -33,6 +33,9 @@ jobs:
       - name: Smoke test CMake executable
         run: ./build-cmake/dgramtunneler --version
 
+      - name: Run CTest suite
+        run: ctest --test-dir build-cmake --output-on-failure
+
       - name: Build with the legacy Makefile
         run: make
 

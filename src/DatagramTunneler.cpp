@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "Log.h"
+#include "Protocol.h"
 
 #ifndef MSG_NOSIGNAL
 // MSG_NOSIGNAL is posix but somehow not portable (undefined on OSX)
@@ -18,32 +19,7 @@
 #endif
 
 static const int NO_FLAGS = 0;
-static const int MAX_DGRAM_LEN = 1472;       // Jumbo frames are not supported
 static const int HEARTBEAT_PERIOD_SEC = 5;   // Client will send tunnel at least 1 packet every 5 seconds wether or not a datagram is received
-
-enum TunnelPktType : uint8_t {
-    HEARTBEAT = 0,
-    DATAGRAM = 1
-};
-
-
-#pragma pack(push,1)
-struct TunnelPacket { // Structure used to tunnel the datagrams
-    TunnelPktType   type_;                     // Packet type
-    uint32_t        udp_dst_ip_;               // UDP destination address
-    uint16_t        udp_dst_port_;             // UDP destination port
-    uint16_t        datalen_;                  // Datagram length
-    char            databuf_[MAX_DGRAM_LEN];   // Datagram buffer
-
-    size_t size() const {
-        if (type_ == TunnelPktType::HEARTBEAT)
-            return 1;
-        else
-            return static_cast<size_t>(datalen_ + 9);
-    }
-};
-static_assert(sizeof(TunnelPacket) == 1481, "The TunnelPacket struct should be 1481 bytes long!");
-#pragma pack(pop)
 
 
 // This method is local to this cpp file, and simply does what its name suggests. Returns false if it fails and sets errno
@@ -180,20 +156,20 @@ void DatagramTunneler::runClient() {
     // Running loop
     while (true) {
         // Read datagram from udp socket
-        if((len_read = recv(udp_socket_, tunnel_pkt.databuf_, MAX_DGRAM_LEN, MSG_TRUNC)) < 0) {
+        if((len_read = recv(udp_socket_, tunnel_pkt.databuf_, kMaxDatagramLength, MSG_TRUNC)) < 0) {
             //TODO: handle errors and edge cases such as jumbo frames
             if (errno != EAGAIN) {
                 DEATH("Unable to read data from UDP socket %d", errno);
             }
-            tunnel_pkt.type_ = TunnelPktType::HEARTBEAT;
+            tunnel_pkt.type_ = TunnelPacketType::Heartbeat;
             INFO("Sending a heartbeat to server.");
         } else {
-            assert(len_read <= MAX_DGRAM_LEN);
-            if (len_read > MAX_DGRAM_LEN) { //this is possible because we are using MSG_TRUNC flag
+            assert(len_read <= static_cast<ssize_t>(kMaxDatagramLength));
+            if (len_read > static_cast<ssize_t>(kMaxDatagramLength)) { //this is possible because we are using MSG_TRUNC flag
                 WARN("Discarding jumbo datagram of %zd bytes!", len_read);
                 continue;
             }
-            tunnel_pkt.type_ = TunnelPktType::DATAGRAM;
+            tunnel_pkt.type_ = TunnelPacketType::Datagram;
             INFO("Tunneling a %zd byte datagram to server.", len_read);
             tunnel_pkt.datalen_ = static_cast<uint16_t>(len_read);
         }
@@ -288,7 +264,7 @@ void DatagramTunneler::runServer() {
             INFO("Client terminated!"); //TODO: review conditions under which this could happen
             exit(0);
         }
-        if (tunnel_pkt.type_ == TunnelPktType::HEARTBEAT) {
+        if (tunnel_pkt.type_ == TunnelPacketType::Heartbeat) {
             INFO("Received heartbeat from client.");
             continue;
         }

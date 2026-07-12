@@ -74,6 +74,16 @@ cpack --config build-cmake/CPackConfig.cmake -B release-artifacts
 
 This produces `.tar.gz` and `.zip` archives named `dgramtunneler-<version>-<system>-<architecture>`. Each archive contains a top-level directory with `bin/dgramtunneler`.
 
+### Tests
+
+The CMake build includes unit tests for DTEP framing and command-line parsing, plus a loopback multicast tunnel round-trip test when Python 3 is available:
+
+```
+cmake -S . -B build-cmake -DBUILD_TESTING=ON
+cmake --build build-cmake
+ctest --test-dir build-cmake --output-on-failure
+```
+
 <a name="synopsis"/>
 
 ## Synopsis
