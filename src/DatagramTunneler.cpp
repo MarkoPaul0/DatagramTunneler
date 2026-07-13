@@ -190,6 +190,12 @@ void DatagramTunneler::setupServer(const Config& cfg) {
     if(setSocketOption(udp_socket_.get(), IPPROTO_IP, IP_MULTICAST_IF, iface) < 0) {
         DEATH("Could not set UDP publisher interface to %s! Error %d", cfg_.udp_iface_ip_.c_str(), lastSocketError());
     }
+    if (cfg_.use_clt_grp_) {
+        const unsigned char disable_loopback = 0;
+        if (setSocketOption(udp_socket_.get(), IPPROTO_IP, IP_MULTICAST_LOOP, disable_loopback) < 0) {
+            DEATH("Could not disable multicast loopback for client-group replication! Error %d", lastSocketError());
+        }
+    }
 
     // Creating TCP socket
     tcp_socket_ = createSocket(SOCK_STREAM);
@@ -207,6 +213,9 @@ void DatagramTunneler::setupServer(const Config& cfg) {
 
 void DatagramTunneler::runServer() {
     INFO("[DatagramTunneler][SERVER MODE] listening for client connection on port %u...", cfg_.tcp_srv_port_);
+    if (cfg_.use_clt_grp_) {
+        WARN("Client-group replication must use different source and destination subnets to avoid multicast feedback loops.");
+    }
     //Listening for client connection and accepting connection
     if (listen(tcp_socket_.get(), 1) < 0) {
         DEATH("Unable to listen on TCP port %u, error %d!", cfg_.tcp_srv_port_, lastSocketError());

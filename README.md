@@ -170,7 +170,11 @@ udp_destination = "replicate_client"
 For server tunnels, `udp_destination = "replicate_client"` republishes to the
 same multicast group and port joined by the client. Omitting `udp_destination`
 retains the same legacy behaviour. Set it to an explicit `IPv4:port` endpoint
-when the destination network should use a different group.
+when the destination network should use a different group. Client-group
+replication is for different source and destination subnets: using it on the
+same subnet can create a multicast feedback loop. The server disables its own
+local multicast loopback in replication mode, but it cannot prevent a separate
+client host on the same subnet from receiving and re-forwarding the packet.
 
 ## Direct command-line use
 

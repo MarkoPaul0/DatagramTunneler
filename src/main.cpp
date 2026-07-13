@@ -246,6 +246,13 @@ std::string endpoint(const std::string& address, uint16_t port) {
     return address + ":" + std::to_string(port);
 }
 
+std::string udpDestination(const NamedTunnel& tunnel) {
+    if (!tunnel.config.is_client_ && tunnel.config.use_clt_grp_) {
+        return std::string(kReplicateClientDestination);
+    }
+    return endpoint(tunnel.config.udp_dst_ip_, tunnel.config.udp_dst_port_);
+}
+
 std::string directCommand(const NamedTunnel& tunnel) {
     const DatagramTunneler::Config& config = tunnel.config;
     if (config.is_client_) {
@@ -265,26 +272,33 @@ std::string directCommand(const NamedTunnel& tunnel) {
 void printTunnelList(const TunnelConfiguration& configuration) {
     struct TunnelRow {
         std::string alias;
-        std::string type;
+        std::string mode;
+        std::string udp_destination;
         std::string command;
     };
 
     std::vector<TunnelRow> rows;
     std::size_t alias_width = std::string("Alias").size();
-    std::size_t type_width = std::string("Type").size();
+    std::size_t mode_width = std::string("Mode").size();
+    std::size_t destination_width = std::string("UDP group / destination").size();
     for (const NamedTunnel& tunnel : configuration.tunnels) {
-        TunnelRow row = {tunnel.alias, modeName(tunnel), directCommand(tunnel)};
+        TunnelRow row = {tunnel.alias, modeName(tunnel), udpDestination(tunnel), directCommand(tunnel)};
         alias_width = std::max(alias_width, row.alias.size());
-        type_width = std::max(type_width, row.type.size());
+        mode_width = std::max(mode_width, row.mode.size());
+        destination_width = std::max(destination_width, row.udp_destination.size());
         rows.push_back(std::move(row));
     }
 
     const int alias_padding = static_cast<int>(alias_width);
-    const int type_padding = static_cast<int>(type_width);
-    printf("%-*s  %-*s  %s\n", alias_padding, "Alias", type_padding, "Type", "Equivalent direct command");
-    printf("%-*s  %-*s  %s\n", alias_padding, "-----", type_padding, "----", "-------------------------");
+    const int mode_padding = static_cast<int>(mode_width);
+    const int destination_padding = static_cast<int>(destination_width);
+    printf("%-*s  %-*s  %-*s  %s\n", alias_padding, "Alias", mode_padding, "Mode",
+           destination_padding, "UDP group / destination", "Equivalent direct command");
+    printf("%-*s  %-*s  %-*s  %s\n", alias_padding, "-----", mode_padding, "----",
+           destination_padding, "-----------------------", "-------------------------");
     for (const TunnelRow& row : rows) {
-        printf("%-*s  %-*s  %s\n", alias_padding, row.alias.c_str(), type_padding, row.type.c_str(), row.command.c_str());
+        printf("%-*s  %-*s  %-*s  %s\n", alias_padding, row.alias.c_str(), mode_padding,
+               row.mode.c_str(), destination_padding, row.udp_destination.c_str(), row.command.c_str());
     }
 }
 

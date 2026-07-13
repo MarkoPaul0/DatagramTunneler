@@ -4,7 +4,9 @@
 import socket
 import subprocess
 import sys
+import tempfile
 import time
+from pathlib import Path
 
 
 LOOPBACK = "127.0.0.1"
@@ -39,11 +41,79 @@ def stop(process):
             process.wait(timeout=2)
 
 
+def run_replicate_client_loopback(executable):
+    tcp_port = free_port(socket.SOCK_STREAM)
+    multicast_port = free_port(socket.SOCK_DGRAM)
+    server = None
+    client = None
+    config_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as config:
+            config_path = Path(config.name)
+            config.write("""version = 1
+
+[tunnels.client]
+mode = "client"
+udp_interface = "127.0.0.1"
+udp_group = "239.1.2.3:{multicast_port}"
+tcp_server = "127.0.0.1:{tcp_port}"
+
+[tunnels.server]
+mode = "server"
+udp_interface = "127.0.0.1"
+tcp_listen_port = {tcp_port}
+udp_destination = "replicate_client"
+""".format(multicast_port=multicast_port, tcp_port=tcp_port))
+
+        server = subprocess.Popen(
+            [executable, "tunnel", "run", "server", "--config", str(config_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(0.25)
+        if server.poll() is not None:
+            raise RuntimeError("replica server exited before accepting a client")
+        client = subprocess.Popen(
+            [executable, "tunnel", "run", "client", "--config", str(config_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(0.25)
+        producer = subprocess.run(
+            [executable, "producer", "client", "--config", str(config_path), "--count", "1"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+        if producer.returncode != 0:
+            raise RuntimeError("replica producer failed")
+
+        # Without disabled server multicast loopback, the client re-tunnels the
+        # server's publication until the server exhausts its send buffer.
+        time.sleep(1)
+        if server.poll() is not None or client.poll() is not None:
+            raise RuntimeError("replica tunnel entered a multicast feedback loop")
+    finally:
+        if client is not None:
+            stop(client)
+        if server is not None:
+            stop(server)
+        if config_path is not None:
+            config_path.unlink(missing_ok=True)
+
+
 def main():
-    if len(sys.argv) != 2:
-        raise RuntimeError("expected the dgramtunneler executable path")
+    if len(sys.argv) not in (2, 3):
+        raise RuntimeError("expected the dgramtunneler executable path and optional replica mode")
 
     executable = sys.argv[1]
+    if len(sys.argv) == 3:
+        if sys.argv[2] != "--replicate-client":
+            raise RuntimeError("unknown test mode")
+        run_replicate_client_loopback(executable)
+        return 0
     tcp_port = free_port(socket.SOCK_STREAM)
     input_port = free_port(socket.SOCK_DGRAM)
     output_port = free_port(socket.SOCK_DGRAM)
