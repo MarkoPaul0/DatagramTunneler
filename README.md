@@ -37,6 +37,9 @@ connection per process. Discovery protocols that require replies need a
 separate return path. The TCP connection is not encrypted or authenticated, so
 run it on a trusted network or inside a secure overlay such as WireGuard or SSH.
 
+See the [practical tutorials](docs/use-cases.md) for multicast relaying,
+telemetry, and remote discovery-testing examples.
+
 ## Install
 
 ### Debian and Ubuntu
@@ -206,7 +209,7 @@ ctest --test-dir build-cmake --output-on-failure
 
 DatagramTunneler transfers multicast traffic from a subnet where a multicast group is available to one where it is not. It has a client and a server:
 
-![Datagram Tunneler](doc/diagram.png)
+![DatagramTunneler network flow](doc/network-flow.png)
 
 ### Client
 
