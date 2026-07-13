@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest a focused improvement to DatagramTunneler.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for sharing an idea. For a large API, protocol, or
+        cross-platform change, describing the problem first helps us discuss it
+        before implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What workflow is difficult or unsupported today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the desired behaviour, command, or configuration.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include existing workarounds or other approaches, if any.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include compatibility, platform, or operational constraints.
