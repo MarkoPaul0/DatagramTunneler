@@ -183,9 +183,20 @@ dgramtunneler producer office-client --compact
 ```
 
 The statistics show forwarded datagram count, average datagram size, and
-average throughput since the tunnel started. Compact mode activates only on an
-interactive terminal; when output is redirected, normal line-oriented logs are
-kept so they remain easy to capture and process.
+average throughput since the tunnel started. On a v2 server, they also show a
+rolling latency average, p50, p99, and maximum for the most recent 1,024
+datagrams. Compact mode activates only on an interactive terminal; when output
+is redirected, normal line-oriented logs are kept so they remain easy to
+capture and process.
+
+### Latency telemetry
+
+Each DTEP v2 datagram carries the client wall-clock timestamp in microseconds.
+The server prints its per-datagram tunnel latency and, every five seconds,
+reports interval average, p50, p99, and maximum latency. These figures require
+the client and server clocks to be reasonably synchronized (for example, with
+NTP); a client clock ahead of the server is reported as unavailable rather than
+as a misleading negative latency.
 
 For server tunnels, `udp_destination = "replicate_client"` republishes to the
 same multicast group and port joined by the client. Omitting `udp_destination`
@@ -262,22 +273,34 @@ Run the server on the destination subnet. It accepts one client connection, then
 
 ## DTEP
 
-DTEP (Datagram Tunneler Encapsulation Protocol) is the binary framing used over the TCP connection:
-![](doc/proto_pkt.png)
-
-A DTEP packet starts with a one-byte type field.
+DTEP (Datagram Tunneler Encapsulation Protocol) is the binary framing used over
+the TCP connection. The current protocol is **version 2**. Every frame starts
+with a one-byte packet type and a one-byte protocol version; a peer using a
+different version is rejected immediately with a clear error.
 
 ### `0x00` — Heartbeat
 
-The client sends heartbeats to confirm that the connection remains alive.
+The client sends a two-byte type/version heartbeat to confirm that the
+connection remains alive.
 
 ### `0x01` — Datagram
 
-This packet encapsulates a UDP datagram observed by the client:
-![](doc/proto_payload.png)
+This packet encapsulates a UDP datagram observed by the client. Its fixed
+18-byte header contains the following fields before the original payload:
+
+| Field | Size | Purpose |
+| --- | --- | --- |
+| Type | 1 byte | `0x01` (datagram) |
+| Protocol version | 1 byte | `0x02` |
+| UDP group address | 4 bytes | IPv4 multicast group joined by the client |
+| UDP group port | 2 bytes | Multicast port |
+| Datagram length | 2 bytes | Original payload length |
+| Client timestamp | 8 bytes | Unix epoch timestamp in microseconds |
 
 * **Datagram length:** payload length, excluding the DTEP header.
 * **UDP channel address and port:** the multicast group where the client received the datagram.
+* **Client timestamp:** used by the server to calculate tunnel latency when
+  both system clocks are synchronized.
 * **Encapsulated UDP datagram:** the original UDP payload.
 
 ## Licensing

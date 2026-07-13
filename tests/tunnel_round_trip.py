@@ -120,12 +120,14 @@ def main():
     receiver = multicast_receiver(OUTPUT_GROUP, output_port)
     server = None
     client = None
+    forwarded = False
+    server_output = ""
 
     try:
         server = subprocess.Popen([
             executable, "--server", "-i", LOOPBACK, "-t", str(tcp_port),
             "-u", "{}:{}".format(OUTPUT_GROUP, output_port),
-        ])
+        ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         # The client exits immediately when a TCP connection is refused, so give
         # the server process time to bind and begin listening before launching it.
         time.sleep(0.25)
@@ -149,18 +151,26 @@ def main():
             try:
                 payload, _ = receiver.recvfrom(2048)
                 if payload == PAYLOAD:
-                    return 0
+                    forwarded = True
+                    break
             except socket.timeout:
                 pass
             time.sleep(0.1)
 
-        raise RuntimeError("timed out waiting for the tunneled multicast datagram")
     finally:
         receiver.close()
         if client is not None:
             stop(client)
         if server is not None:
             stop(server)
+            if server.stdout is not None:
+                server_output = server.stdout.read()
+
+    if not forwarded:
+        raise RuntimeError("timed out waiting for the tunneled multicast datagram")
+    if "Latency:" not in server_output:
+        raise RuntimeError("server did not report per-datagram tunnel latency")
+    return 0
 
 
 if __name__ == "__main__":

@@ -22,16 +22,20 @@ bool expect(bool condition, const char* message) {
 bool testProtocolFraming() {
     TunnelPacket packet{};
     packet.type_ = TunnelPacketType::Heartbeat;
-    if (!expect(packet.size() == 1, "heartbeat frame must be one byte")) {
+    packet.protocol_version_ = kDtepProtocolVersion;
+    if (!expect(packet.size() == kTunnelPacketPreambleLength, "heartbeat frame must include type and version")) {
         return false;
     }
 
     packet.type_ = TunnelPacketType::Datagram;
     packet.datalen_ = 42;
     return expect(packet.size() == kTunnelPacketHeaderLength + 42, "datagram frame length must include its header") &&
-           expect(offsetof(TunnelPacket, udp_dst_ip_) == 1, "destination address must follow packet type") &&
-           expect(offsetof(TunnelPacket, udp_dst_port_) == 5, "destination port offset must be stable") &&
-           expect(offsetof(TunnelPacket, datalen_) == 7, "datagram length offset must be stable") &&
+           expect(kDtepProtocolVersion == 2, "timestamp protocol must use version 2") &&
+           expect(offsetof(TunnelPacket, protocol_version_) == 1, "protocol version must follow packet type") &&
+           expect(offsetof(TunnelPacket, udp_dst_ip_) == 2, "destination address must follow packet version") &&
+           expect(offsetof(TunnelPacket, udp_dst_port_) == 6, "destination port offset must be stable") &&
+           expect(offsetof(TunnelPacket, datalen_) == 8, "datagram length offset must be stable") &&
+           expect(offsetof(TunnelPacket, client_timestamp_us_) == 10, "timestamp must follow the datagram length") &&
            expect(offsetof(TunnelPacket, databuf_) == kTunnelPacketHeaderLength, "payload must follow the header");
 }
 

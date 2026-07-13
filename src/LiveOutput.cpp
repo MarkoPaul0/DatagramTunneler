@@ -1,11 +1,13 @@
 #include "LiveOutput.h"
 
 #include <array>
+#include <algorithm>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
-#include <cstring>
+#include <deque>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include <io.h>
@@ -86,6 +88,17 @@ public:
         render();
     }
 
+    void recordLatencyValue(double milliseconds) {
+        if (!enabled_) {
+            return;
+        }
+        latency_samples_.push_back(milliseconds);
+        if (latency_samples_.size() > kMaxLatencySamples) {
+            latency_samples_.pop_front();
+        }
+        render();
+    }
+
     ~CompactOutput() {
         if (enabled_) {
             std::fputs("\033[?25h\n", stdout);
@@ -101,10 +114,28 @@ private:
             static_cast<double>(byte_count_) / static_cast<double>(datagram_count_);
         const double throughput = elapsed_seconds <= 0.0 ? 0.0 :
             static_cast<double>(byte_count_) / elapsed_seconds;
-        char buffer[192] {};
+        char buffer[320] {};
+        if (latency_samples_.empty()) {
+            std::snprintf(buffer, sizeof(buffer),
+                          "Stats | datagrams: %zu | average size: %.1f B | throughput: %.1f B/s | latency: unavailable",
+                          datagram_count_, average_size, throughput);
+            return buffer;
+        }
+        std::vector<double> latency(latency_samples_.begin(), latency_samples_.end());
+        std::sort(latency.begin(), latency.end());
+        double latency_sum = 0.0;
+        for (const double sample : latency) {
+            latency_sum += sample;
+        }
+        const auto percentile = [&latency](double percentile_value) {
+            const std::size_t index = static_cast<std::size_t>(percentile_value *
+                static_cast<double>(latency.size() - 1));
+            return latency[index];
+        };
         std::snprintf(buffer, sizeof(buffer),
-                      "Stats | datagrams: %zu | average size: %.1f B | throughput: %.1f B/s",
-                      datagram_count_, average_size, throughput);
+                      "Stats | datagrams: %zu | average size: %.1f B | throughput: %.1f B/s | latency ms: avg %.2f p50 %.2f p99 %.2f max %.2f",
+                      datagram_count_, average_size, throughput, latency_sum / static_cast<double>(latency.size()),
+                      percentile(0.50), percentile(0.99), latency.back());
         return buffer;
     }
 
@@ -130,6 +161,8 @@ private:
     std::size_t event_count_ = 0;
     std::size_t datagram_count_ = 0;
     std::size_t byte_count_ = 0;
+    static constexpr std::size_t kMaxLatencySamples = 1024;
+    std::deque<double> latency_samples_;
     std::chrono::steady_clock::time_point started_at_ {};
 };
 
@@ -155,4 +188,8 @@ void logMessage(LogLevel level, const char* format, ...) {
 
 void recordDatagram(std::size_t bytes) {
     output().record(bytes);
+}
+
+void recordLatency(double milliseconds) {
+    output().recordLatencyValue(milliseconds);
 }

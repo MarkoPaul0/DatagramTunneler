@@ -12,3 +12,4 @@ enum class LogLevel {
 void configureCompactOutput(bool requested);
 void logMessage(LogLevel level, const char* format, ...);
 void recordDatagram(std::size_t bytes);
+void recordLatency(double milliseconds);
