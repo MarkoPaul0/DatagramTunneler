@@ -91,7 +91,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.name }}
-          path: release-artifacts/*
+          path: |
+            release-artifacts/*.tar.gz
+            release-artifacts/*.zip
+            release-artifacts/*.deb
           if-no-files-found: error
 
   build-windows:
@@ -155,7 +158,9 @@ jobs:
         shell: bash
         working-directory: release-artifacts
         run: |
-          find . -type f -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS
+          find . -mindepth 2 -maxdepth 2 -type f \( \
+            -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \
+          \) -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS
 
       - name: Create GitHub Release
         shell: bash
@@ -177,11 +182,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mapfile -d '' artifacts < <(find release-artifacts -type f -print0)
+          mapfile -d '' artifacts < <(find release-artifacts -mindepth 2 -maxdepth 2 -type f \( \
+            -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \
+          \) -print0)
           if [[ "${#artifacts[@]}" -eq 0 ]]; then
             echo "No release artifacts were downloaded." >&2
             exit 1
           fi
+          artifacts+=("release-artifacts/SHA256SUMS")
           gh release upload "$RELEASE_TAG" \
             --repo "${GITHUB_REPOSITORY}" \
             --clobber \
