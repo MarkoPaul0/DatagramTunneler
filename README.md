@@ -187,7 +187,9 @@ average throughput since the tunnel started. On a v2 server, they also show a
 rolling latency average, p50, p99, and maximum for the most recent 1,024
 datagrams. Compact mode activates only on an interactive terminal; when output
 is redirected, normal line-oriented logs are kept so they remain easy to
-capture and process.
+capture and process. Its statistics line identifies the active client, server,
+or producer route; event lines use short actions such as `forwarded`,
+`published`, and `sent` rather than repeating the route for every datagram.
 
 ### Latency telemetry
 

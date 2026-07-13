@@ -52,17 +52,26 @@ bool enableAnsiTerminal() {
 
 class CompactOutput {
 public:
-    void configure(bool requested) {
-        if (!requested || enabled_) {
+    void configure(bool requested, std::string_view context) {
+        if (!requested) {
             return;
         }
-        enabled_ = enableAnsiTerminal();
         if (!enabled_) {
-            return;
+            enabled_ = enableAnsiTerminal();
+            if (!enabled_) {
+                return;
+            }
+            started_at_ = std::chrono::steady_clock::now();
+            std::fputs("\033[?25l\n\n\n\n\n\n", stdout);
         }
-        started_at_ = std::chrono::steady_clock::now();
-        std::fputs("\033[?25l\n\n\n\n\n\n", stdout);
+        if (!context.empty()) {
+            context_ = context;
+        }
         render();
+    }
+
+    bool enabled() const {
+        return enabled_;
     }
 
     void log(LogLevel level, const char* message) {
@@ -71,12 +80,18 @@ public:
             std::fflush(stdout);
             return;
         }
-        events_[next_event_] = std::string(levelName(level)) + "  " + message;
-        next_event_ = (next_event_ + 1) % kEventLines;
-        if (event_count_ < kEventLines) {
-            ++event_count_;
+        appendEvent(std::string(levelName(level)) + "  " + message);
+    }
+
+    void logCompact(LogLevel level, const char* message) {
+        if (!enabled_) {
+            return;
         }
-        render();
+        if (level == LogLevel::Info) {
+            appendEvent(message);
+        } else {
+            appendEvent(std::string(levelName(level)) + "  " + message);
+        }
     }
 
     void record(std::size_t bytes) {
@@ -107,6 +122,14 @@ public:
     }
 
 private:
+    void appendEvent(std::string event) {
+        events_[next_event_] = std::move(event);
+        next_event_ = (next_event_ + 1) % kEventLines;
+        if (event_count_ < kEventLines) {
+            ++event_count_;
+        }
+        render();
+    }
     std::string statisticsLine() const {
         const auto elapsed = std::chrono::steady_clock::now() - started_at_;
         const double elapsed_seconds = std::chrono::duration<double>(elapsed).count();
@@ -115,10 +138,11 @@ private:
         const double throughput = elapsed_seconds <= 0.0 ? 0.0 :
             static_cast<double>(byte_count_) / elapsed_seconds;
         char buffer[320] {};
+        const char* const prefix = context_.empty() ? "Stats" : context_.c_str();
         if (latency_samples_.empty()) {
             std::snprintf(buffer, sizeof(buffer),
-                          "Stats | datagrams: %zu | average size: %.1f B | throughput: %.1f B/s | latency: unavailable",
-                          datagram_count_, average_size, throughput);
+                          "%s | %zu pkts | %.1f B avg | %.1f B/s | latency: unavailable",
+                          prefix, datagram_count_, average_size, throughput);
             return buffer;
         }
         std::vector<double> latency(latency_samples_.begin(), latency_samples_.end());
@@ -133,8 +157,8 @@ private:
             return latency[index];
         };
         std::snprintf(buffer, sizeof(buffer),
-                      "Stats | datagrams: %zu | average size: %.1f B | throughput: %.1f B/s | latency ms: avg %.2f p50 %.2f p99 %.2f max %.2f",
-                      datagram_count_, average_size, throughput, latency_sum / static_cast<double>(latency.size()),
+                      "%s | %zu pkts | %.1f B avg | %.1f B/s | lat ms: %.2f avg / %.2f p50 / %.2f p99 / %.2f max",
+                      prefix, datagram_count_, average_size, throughput, latency_sum / static_cast<double>(latency.size()),
                       percentile(0.50), percentile(0.99), latency.back());
         return buffer;
     }
@@ -156,6 +180,7 @@ private:
     }
 
     bool enabled_ = false;
+    std::string context_;
     std::array<std::string, kEventLines> events_ {};
     std::size_t next_event_ = 0;
     std::size_t event_count_ = 0;
@@ -173,8 +198,12 @@ CompactOutput& output() {
 
 } // namespace
 
-void configureCompactOutput(bool requested) {
-    output().configure(requested);
+void configureCompactOutput(bool requested, std::string_view context) {
+    output().configure(requested, context);
+}
+
+bool compactOutputEnabled() {
+    return output().enabled();
 }
 
 void logMessage(LogLevel level, const char* format, ...) {
@@ -184,6 +213,18 @@ void logMessage(LogLevel level, const char* format, ...) {
     std::vsnprintf(message, sizeof(message), format, arguments);
     va_end(arguments);
     output().log(level, message);
+}
+
+void logCompactMessage(LogLevel level, const char* format, ...) {
+    if (!compactOutputEnabled()) {
+        return;
+    }
+    char message[1024] {};
+    va_list arguments;
+    va_start(arguments, format);
+    std::vsnprintf(message, sizeof(message), format, arguments);
+    va_end(arguments);
+    output().logCompact(level, message);
 }
 
 void recordDatagram(std::size_t bytes) {

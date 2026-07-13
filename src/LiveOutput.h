@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string_view>
 
 enum class LogLevel {
     Info,
@@ -9,7 +10,9 @@ enum class LogLevel {
     Death,
 };
 
-void configureCompactOutput(bool requested);
+void configureCompactOutput(bool requested, std::string_view context = {});
+bool compactOutputEnabled();
 void logMessage(LogLevel level, const char* format, ...);
+void logCompactMessage(LogLevel level, const char* format, ...);
 void recordDatagram(std::size_t bytes);
 void recordLatency(double milliseconds);

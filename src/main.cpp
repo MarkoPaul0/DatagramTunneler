@@ -256,6 +256,20 @@ std::string endpoint(const std::string& address, uint16_t port) {
     return address + ":" + std::to_string(port);
 }
 
+std::string compactTunnelContext(const DatagramTunneler::Config& config) {
+    if (config.is_client_) {
+        return "CLIENT " + endpoint(config.udp_dst_ip_, config.udp_dst_port_) + " -> TCP " +
+               endpoint(config.tcp_srv_ip_, config.tcp_srv_port_);
+    }
+    const std::string destination = config.use_clt_grp_ ? "client group" : endpoint(config.udp_dst_ip_, config.udp_dst_port_);
+    return "SERVER TCP :" + std::to_string(config.tcp_srv_port_) + " -> " + destination;
+}
+
+std::string compactProducerContext(const DatagramTunneler::Config& config, const DatagramProducer::Options& options) {
+    return "PRODUCER -> " + endpoint(config.udp_dst_ip_, config.udp_dst_port_) + " @ " +
+           std::to_string(options.interval_ms) + " ms";
+}
+
 std::string udpDestination(const NamedTunnel& tunnel) {
     if (!tunnel.config.is_client_ && tunnel.config.use_clt_grp_) {
         return std::string(kReplicateClientDestination);
@@ -401,7 +415,7 @@ int runTunnelCommand(int argc, char* argv[]) {
     if (subcommand == "run") {
         DatagramTunneler::Config config = tunnel.config;
         config.compact_output_ = arguments.compact_output;
-        configureCompactOutput(config.compact_output_);
+        configureCompactOutput(config.compact_output_, compactTunnelContext(config));
         DatagramTunneler tunneler(std::move(config));
         tunneler.run();
         return 0;
@@ -416,7 +430,7 @@ int runProducerCommand(int argc, char* argv[]) {
     if (!tunnel.config.is_client_) {
         throw std::runtime_error("producer alias '" + tunnel.alias + "' must name a client tunnel");
     }
-    configureCompactOutput(command.compact_output);
+    configureCompactOutput(command.compact_output, compactProducerContext(tunnel.config, command.options));
     DatagramProducer producer(tunnel.config, command.options);
     producer.run();
     return 0;
@@ -466,7 +480,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Create and run the datagram tunneler with the parsed config
-    configureCompactOutput(cfg.compact_output_);
+    configureCompactOutput(cfg.compact_output_, compactTunnelContext(cfg));
     DatagramTunneler tunneler(std::move(cfg));
     tunneler.run();
 

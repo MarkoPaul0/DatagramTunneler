@@ -61,10 +61,14 @@ void DatagramProducer::run() {
         throw std::runtime_error("producer has an invalid multicast group address");
     }
 
-    INFO("Producer sending to multicast %s:%u via %s every %u ms%s",
-         config_.udp_dst_ip_.c_str(), static_cast<unsigned int>(config_.udp_dst_port_),
-         config_.udp_iface_ip_.c_str(), options_.interval_ms,
-         options_.count == 0 ? " until interrupted" : "");
+    if (compactOutputEnabled()) {
+        logCompactMessage(LogLevel::Info, "ready");
+    } else {
+        INFO("Producer sending to multicast %s:%u via %s every %u ms%s",
+             config_.udp_dst_ip_.c_str(), static_cast<unsigned int>(config_.udp_dst_port_),
+             config_.udp_iface_ip_.c_str(), options_.interval_ms,
+             options_.count == 0 ? " until interrupted" : "");
+    }
 
     for (std::size_t number = 1; options_.count == 0 || number <= options_.count; ++number) {
         const std::string payload = options_.payload_prefix + " #" + std::to_string(number);
@@ -81,7 +85,11 @@ void DatagramProducer::run() {
         }
 
         recordDatagram(static_cast<std::size_t>(bytes_sent));
-        INFO("Sent %s", payload.c_str());
+        if (compactOutputEnabled()) {
+            logCompactMessage(LogLevel::Info, "sent #%zu | %zu B", number, payload.size());
+        } else {
+            INFO("Sent %s", payload.c_str());
+        }
         if (options_.count == 0 || number < options_.count) {
             std::this_thread::sleep_for(std::chrono::milliseconds(options_.interval_ms));
         }
