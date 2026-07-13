@@ -105,7 +105,7 @@ cmake --build build-cmake
 cmake --install build-cmake --prefix ~/.local
 ```
 
-The legacy Makefile remains available with `make`, but CMake is the supported build and installation path.
+CMake is the supported build and installation path.
 
 ## First tunnel
 

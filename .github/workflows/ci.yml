@@ -38,12 +38,6 @@ jobs:
       - name: Run CTest suite
         run: ctest --test-dir build-cmake --output-on-failure
 
-      - name: Build with the legacy Makefile
-        run: make
-
-      - name: Smoke test legacy executable
-        run: ./bin/datagramtunneler --version
-
       - name: Create release archives
         run: cpack --config build-cmake/CPackConfig.cmake -B release-artifacts
 
