@@ -117,13 +117,25 @@ dgramtunneler config edit
 dgramtunneler tunnel list
 ```
 
-Run an entry by alias:
+Run the server first, then the client:
 
 ```sh
+dgramtunneler tunnel run office-server
 dgramtunneler tunnel run office-client
 ```
 
+In a third terminal, generate five test datagrams for the client tunnel:
+
+```sh
+dgramtunneler producer office-client --count 5
+```
+
 Use `dgramtunneler tunnel show <alias>` to inspect the definition and `dgramtunneler tunnel validate [alias]` to check it before running.
+
+`producer <client-alias>` sends `Dummy datagram #1`, `Dummy datagram #2`, and
+so on to that client tunnel's configured multicast group. It defaults to one
+datagram per second until interrupted. Use `--count`, `--interval-ms`, and
+`--payload-prefix` to control a test run.
 
 ## Named tunnels
 

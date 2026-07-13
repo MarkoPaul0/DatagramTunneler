@@ -20,6 +20,7 @@ add_executable(dgramtunneler
     src/CommandLine.cpp
     src/Configuration.cpp
     src/Network.cpp
+    src/Producer.cpp
     src/DatagramTunneler.cpp)
 
 target_compile_features(dgramtunneler PRIVATE cxx_std_20)
@@ -110,6 +111,11 @@ if(BUILD_TESTING)
         COMMAND dgramtunneler tunnel list --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml")
     set_tests_properties(tunnel_list_command PROPERTIES
         PASS_REGULAR_EXPRESSION "Alias[ \\t]+Type[ \\t]+Equivalent direct command")
+
+    add_test(NAME producer_command
+        COMMAND dgramtunneler producer example-client --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml" --count 2 --interval-ms 1)
+    set_tests_properties(producer_command PROPERTIES
+        PASS_REGULAR_EXPRESSION "Sent Dummy datagram #2")
 
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)

@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -19,6 +20,7 @@
 #include "Configuration.h"
 #include "Log.h"
 #include "Network.h"
+#include "Producer.h"
 
 #ifndef DGRAMTUNNELER_VERSION
 #define DGRAMTUNNELER_VERSION "development"
@@ -35,6 +37,7 @@ static void printUsage(const char* binary_name) {
     printf("    %s tunnel show <alias> [--config <path>]\n", binary_name);
     printf("    %s tunnel validate [alias] [--config <path>]\n", binary_name);
     printf("    %s tunnel run <alias> [--config <path>]\n", binary_name);
+    printf("    %s producer <client-alias> [--config <path>] [--interval-ms <ms>] [--count <n>] [--payload-prefix <text>]\n", binary_name);
     printf("\nDirect invocation:\n");
     printf("Server mode:\n");
     printf("    %s --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>]\n", binary_name);
@@ -71,6 +74,71 @@ CommandArguments parseCommandArguments(int argc, char* argv[], int start_index) 
         arguments.config_path = defaultConfigurationPath();
     }
     return arguments;
+}
+
+std::size_t parsePositiveSize(const std::string& value, const char* option) {
+    try {
+        std::size_t parsed_length = 0;
+        const unsigned long long parsed = std::stoull(value, &parsed_length);
+        if (parsed_length != value.size() || parsed == 0 ||
+            parsed > static_cast<unsigned long long>(std::numeric_limits<std::size_t>::max())) {
+            throw std::out_of_range("value");
+        }
+        return static_cast<std::size_t>(parsed);
+    } catch (const std::exception&) {
+        throw std::runtime_error(std::string(option) + " must be a positive integer");
+    }
+}
+
+struct ProducerCommand {
+    std::filesystem::path config_path;
+    std::string alias;
+    DatagramProducer::Options options;
+};
+
+ProducerCommand parseProducerCommand(int argc, char* argv[]) {
+    ProducerCommand command;
+    for (int index = 2; index < argc; ++index) {
+        const std::string argument = argv[index];
+        if (argument == "--config") {
+            if (index + 1 >= argc) {
+                throw std::runtime_error("--config requires a file path");
+            }
+            command.config_path = argv[++index];
+        } else if (argument == "--interval-ms") {
+            if (index + 1 >= argc) {
+                throw std::runtime_error("--interval-ms requires a value");
+            }
+            const std::size_t interval = parsePositiveSize(argv[++index], "--interval-ms");
+            if (interval > std::numeric_limits<unsigned int>::max()) {
+                throw std::runtime_error("--interval-ms is too large");
+            }
+            command.options.interval_ms = static_cast<unsigned int>(interval);
+        } else if (argument == "--count") {
+            if (index + 1 >= argc) {
+                throw std::runtime_error("--count requires a value");
+            }
+            command.options.count = parsePositiveSize(argv[++index], "--count");
+        } else if (argument == "--payload-prefix") {
+            if (index + 1 >= argc) {
+                throw std::runtime_error("--payload-prefix requires a value");
+            }
+            command.options.payload_prefix = argv[++index];
+        } else if (!argument.empty() && argument.front() == '-') {
+            throw std::runtime_error("unknown producer option '" + argument + "'");
+        } else if (command.alias.empty()) {
+            command.alias = argument;
+        } else {
+            throw std::runtime_error("producer requires exactly one client alias");
+        }
+    }
+    if (command.alias.empty()) {
+        throw std::runtime_error("producer requires exactly one client alias");
+    }
+    if (command.config_path.empty()) {
+        command.config_path = defaultConfigurationPath();
+    }
+    return command;
 }
 
 std::vector<std::string> splitEditorCommand(const std::string& command) {
@@ -309,6 +377,18 @@ int runTunnelCommand(int argc, char* argv[]) {
     throw std::runtime_error("unknown tunnel subcommand '" + subcommand + "'");
 }
 
+int runProducerCommand(int argc, char* argv[]) {
+    const ProducerCommand command = parseProducerCommand(argc, argv);
+    const TunnelConfiguration configuration = loadConfiguration(command.config_path);
+    const NamedTunnel& tunnel = findTunnel(configuration, command.alias);
+    if (!tunnel.config.is_client_) {
+        throw std::runtime_error("producer alias '" + tunnel.alias + "' must name a client tunnel");
+    }
+    DatagramProducer producer(tunnel.config, command.options);
+    producer.run();
+    return 0;
+}
+
 } // namespace
 
 
@@ -330,6 +410,9 @@ int main(int argc, char* argv[]) {
         }
         if (argc >= 2 && std::string(argv[1]) == "tunnel") {
             return runTunnelCommand(argc, argv);
+        }
+        if (argc >= 2 && std::string(argv[1]) == "producer") {
+            return runProducerCommand(argc, argv);
         }
     } catch (const std::exception& error) {
         ERROR("%s", error.what());

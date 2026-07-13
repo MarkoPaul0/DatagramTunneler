@@ -47,6 +47,17 @@ Send a test datagram from the source network:
 printf 'hello multicast\n' | nc -u -w 1 239.1.2.3 5000
 ```
 
+When the source group is defined by a named client tunnel, the built-in
+producer removes the need for `nc`:
+
+```sh
+dgramtunneler producer <client-alias> --count 5
+```
+
+It sends `Dummy datagram #1` through `Dummy datagram #5` to that alias's
+configured source multicast group. Add `--interval-ms 250` or
+`--payload-prefix "Telemetry test"` to adjust the test stream.
+
 On a destination-network host, join `239.1.2.4:5000` with the receiving
 application or packet-capture tool. It should receive `hello multicast`.
 
@@ -111,6 +122,12 @@ dgramtunneler tunnel run telemetry-destination
 ```sh
 dgramtunneler tunnel validate telemetry-source
 dgramtunneler tunnel run telemetry-source
+```
+
+In another terminal on the source network, generate a finite test feed:
+
+```sh
+dgramtunneler producer telemetry-source --count 10
 ```
 
 This pattern is suited to telemetry, simulation output, and observability
