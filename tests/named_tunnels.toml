@@ -11,3 +11,9 @@ mode = "server"
 udp_interface = "127.0.0.1"
 tcp_listen_port = 14052
 udp_destination = "239.1.2.4:5000"
+
+[tunnels.replica-server]
+mode = "server"
+udp_interface = "127.0.0.1"
+tcp_listen_port = 14053
+udp_destination = "replicate_client"

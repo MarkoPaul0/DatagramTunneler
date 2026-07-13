@@ -1,8 +1,12 @@
 #include "DatagramTunneler.h"
 
 #include <assert.h>
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
+#include <cmath>
 #include <utility>
+#include <vector>
 
 #include "Log.h"
 #include "Network.h"
@@ -12,6 +16,50 @@ namespace {
 
 constexpr int kNoFlags = 0;
 constexpr int kHeartbeatPeriodSeconds = 5;
+constexpr auto kLatencyReportInterval = std::chrono::seconds(5);
+
+uint64_t currentTimestampMicroseconds() {
+    const auto elapsed = std::chrono::system_clock::now().time_since_epoch();
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
+}
+
+class LatencyStatistics {
+public:
+    void record(double milliseconds) {
+        samples_.push_back(milliseconds);
+    }
+
+    void reportIfDue() {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last_report_ < kLatencyReportInterval || samples_.empty()) {
+            return;
+        }
+        if (compactOutputEnabled()) {
+            samples_.clear();
+            last_report_ = now;
+            return;
+        }
+        std::sort(samples_.begin(), samples_.end());
+        double sum = 0.0;
+        for (const double sample : samples_) {
+            sum += sample;
+        }
+        const auto percentile = [this](double percentile_value) {
+            const std::size_t index = static_cast<std::size_t>(std::ceil(percentile_value *
+                static_cast<double>(samples_.size()))) - 1;
+            return samples_[index];
+        };
+        INFO("Tunnel latency over the last interval: avg %.3f ms, p50 %.3f ms, p99 %.3f ms, max %.3f ms (%zu datagram%s)",
+             sum / static_cast<double>(samples_.size()), percentile(0.50), percentile(0.99), samples_.back(),
+             samples_.size(), samples_.size() == 1 ? "" : "s");
+        samples_.clear();
+        last_report_ = now;
+    }
+
+private:
+    std::vector<double> samples_;
+    std::chrono::steady_clock::time_point last_report_ = std::chrono::steady_clock::now();
+};
 
 Socket createSocket(int type) {
     Socket socket_handle(socket(AF_INET, type, kNoFlags));
@@ -125,8 +173,12 @@ void DatagramTunneler::runClient() {
     if (connect(tcp_socket_.get(), reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)) < 0) {
         DEATH("Unable to connect to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, lastSocketError());
     }
-    INFO("[DatagramTunneler][CLIENT-MODE] connected to TCP remote %s:%u and listening to multicast %s:%u",
-    cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
+    if (compactOutputEnabled()) {
+        logCompactMessage(LogLevel::Info, "connected to TCP server");
+    } else {
+        INFO("[DatagramTunneler][CLIENT-MODE] connected to TCP remote %s:%u and listening to multicast %s:%u",
+             cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
+    }
 
     // Join multicast group
     ip_mreq udp_group {};
@@ -135,10 +187,15 @@ void DatagramTunneler::runClient() {
     if(setSocketOption(udp_socket_.get(), IPPROTO_IP, IP_ADD_MEMBERSHIP, udp_group) < 0) {
         DEATH("Could not join multicast group %s:%u. Error %d", cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_, lastSocketError());
     }
-    INFO("Joined multicast group %s:%u.", cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
+    if (compactOutputEnabled()) {
+        logCompactMessage(LogLevel::Info, "joined multicast group");
+    } else {
+        INFO("Joined multicast group %s:%u.", cfg_.udp_dst_ip_.c_str(), cfg_.udp_dst_port_);
+    }
 
     // Setting up the DTEP header in the TunnelPacket struct
     TunnelPacket tunnel_pkt {};
+    tunnel_pkt.protocol_version_ = kDtepProtocolVersion;
     inet_pton(AF_INET, cfg_.udp_dst_ip_.c_str(), &tunnel_pkt.udp_dst_ip_);
     tunnel_pkt.udp_dst_port_ = cfg_.udp_dst_port_;
     SocketIoSize len_read = 0;
@@ -156,7 +213,11 @@ void DatagramTunneler::runClient() {
                 DEATH("Unable to read data from UDP socket %d", error_code);
             }
             tunnel_pkt.type_ = TunnelPacketType::Heartbeat;
-            INFO("Sending a heartbeat to server.");
+            if (compactOutputEnabled()) {
+                logCompactMessage(LogLevel::Info, "heartbeat -> TCP");
+            } else {
+                INFO("Sending a heartbeat to server.");
+            }
         } else {
             assert(len_read <= static_cast<SocketIoSize>(kMaxDatagramLength));
             if (len_read > static_cast<SocketIoSize>(kMaxDatagramLength)) { //this is possible because we are using MSG_TRUNC flag
@@ -164,13 +225,21 @@ void DatagramTunneler::runClient() {
                 continue;
             }
             tunnel_pkt.type_ = TunnelPacketType::Datagram;
-            INFO("Tunneling a %zu byte datagram to server.", static_cast<size_t>(len_read));
+            if (compactOutputEnabled()) {
+                logCompactMessage(LogLevel::Info, "forwarded %zu B", static_cast<size_t>(len_read));
+            } else {
+                INFO("Tunneling a %zu byte datagram to server.", static_cast<size_t>(len_read));
+            }
             tunnel_pkt.datalen_ = static_cast<uint16_t>(len_read);
+            tunnel_pkt.client_timestamp_us_ = currentTimestampMicroseconds();
         }
 
         // Send the encapsulated datagram to the server over the TCP connection
         if(!sendTCPData(tcp_socket_.get(), &tunnel_pkt, tunnel_pkt.size(), kNoSignalFlag)) {
             DEATH("Unable to send data to server! Error %d", lastSocketError());
+        }
+        if (tunnel_pkt.type_ == TunnelPacketType::Datagram) {
+            recordDatagram(tunnel_pkt.datalen_);
         }
     }
 }
@@ -190,6 +259,12 @@ void DatagramTunneler::setupServer(const Config& cfg) {
     if(setSocketOption(udp_socket_.get(), IPPROTO_IP, IP_MULTICAST_IF, iface) < 0) {
         DEATH("Could not set UDP publisher interface to %s! Error %d", cfg_.udp_iface_ip_.c_str(), lastSocketError());
     }
+    if (cfg_.use_clt_grp_) {
+        const unsigned char disable_loopback = 0;
+        if (setSocketOption(udp_socket_.get(), IPPROTO_IP, IP_MULTICAST_LOOP, disable_loopback) < 0) {
+            DEATH("Could not disable multicast loopback for client-group replication! Error %d", lastSocketError());
+        }
+    }
 
     // Creating TCP socket
     tcp_socket_ = createSocket(SOCK_STREAM);
@@ -206,7 +281,14 @@ void DatagramTunneler::setupServer(const Config& cfg) {
 
 
 void DatagramTunneler::runServer() {
-    INFO("[DatagramTunneler][SERVER MODE] listening for client connection on port %u...", cfg_.tcp_srv_port_);
+    if (compactOutputEnabled()) {
+        logCompactMessage(LogLevel::Info, "listening for client");
+    } else {
+        INFO("[DatagramTunneler][SERVER MODE] listening for client connection on port %u...", cfg_.tcp_srv_port_);
+    }
+    if (cfg_.use_clt_grp_) {
+        WARN("Client-group replication must use different source and destination subnets to avoid multicast feedback loops.");
+    }
     //Listening for client connection and accepting connection
     if (listen(tcp_socket_.get(), 1) < 0) {
         DEATH("Unable to listen on TCP port %u, error %d!", cfg_.tcp_srv_port_, lastSocketError());
@@ -217,7 +299,11 @@ void DatagramTunneler::runServer() {
     if (!client_socket.valid()) {
         DEATH("Unable to accept incoming TCP connection, accept() error %d!", lastSocketError());
     }
-    INFO("Accepted incoming connection from a remote host. Waiting for forwarded datagrams...");
+    if (compactOutputEnabled()) {
+        logCompactMessage(LogLevel::Info, "client connected");
+    } else {
+        INFO("Accepted incoming connection from a remote host. Waiting for forwarded datagrams...");
+    }
 
     // Setting up TCP timeout HEARTBEAT_PERIOD_SEC + 1 second
     if (!setSocketReceiveTimeout(client_socket.get(), kHeartbeatPeriodSeconds + 1)) {
@@ -234,7 +320,8 @@ void DatagramTunneler::runServer() {
     TunnelPacket tunnel_pkt {};
     char* p = reinterpret_cast<char*>(&tunnel_pkt); //a write pointer
     SocketIoSize len_read = 0;
-    size_t len_to_read = 1;
+    size_t len_to_read = kTunnelPacketPreambleLength;
+    LatencyStatistics latency_statistics;
     while(true) {
         assert(len_to_read != 0);
         // Reading data sent from client
@@ -250,13 +337,31 @@ void DatagramTunneler::runServer() {
             INFO("Client terminated!"); //TODO: review conditions under which this could happen
             return;
         }
-        if (tunnel_pkt.type_ == TunnelPacketType::Heartbeat) {
-            INFO("Received heartbeat from client.");
-            continue;
-        }
         p += len_read;
         assert(p > reinterpret_cast<char*>(&tunnel_pkt));
         const size_t data_len = static_cast<size_t>(p - reinterpret_cast<char*>(&tunnel_pkt));
+        if (data_len < kTunnelPacketPreambleLength) {
+            len_to_read = kTunnelPacketPreambleLength - data_len;
+            continue;
+        }
+        if (tunnel_pkt.protocol_version_ != kDtepProtocolVersion) {
+            DEATH("Unsupported DTEP protocol version %u (this server requires version %u)",
+                  static_cast<unsigned int>(tunnel_pkt.protocol_version_), static_cast<unsigned int>(kDtepProtocolVersion));
+        }
+        if (tunnel_pkt.type_ == TunnelPacketType::Heartbeat) {
+            p = reinterpret_cast<char*>(&tunnel_pkt);
+            len_to_read = kTunnelPacketPreambleLength;
+            if (compactOutputEnabled()) {
+                logCompactMessage(LogLevel::Info, "heartbeat <- client");
+            } else {
+                INFO("Received heartbeat from client.");
+            }
+            latency_statistics.reportIfDue();
+            continue;
+        }
+        if (tunnel_pkt.type_ != TunnelPacketType::Datagram) {
+            DEATH("Unsupported DTEP packet type %u", static_cast<unsigned int>(tunnel_pkt.type_));
+        }
         if (data_len < kTunnelPacketHeaderLength) {
             len_to_read = kTunnelPacketHeaderLength - data_len;
             continue; //read enough bytes to get the whole DTEP header
@@ -265,9 +370,9 @@ void DatagramTunneler::runServer() {
             len_to_read = tunnel_pkt.size() - data_len;
             continue; //we need the whole DTEP packet before publishing it
         }
-        assert(data_len == tunnel_pkt.size()); //we only read enough byte to at most get the whole DTEP (+8 for DTEP header)
+        assert(data_len == tunnel_pkt.size()); //we only read enough bytes for one complete DTEP frame
         p = reinterpret_cast<char*>(&tunnel_pkt); //we have read a full packet, we now reset the write pointer to the beginning of tunnel_pkt
-        len_to_read = 1;
+        len_to_read = kTunnelPacketPreambleLength;
 
         if (cfg_.use_clt_grp_) { //potential for feedbackloop if both client and server are in the same subnet
 //however if that were the case, there would be no need to forward the datagrams
@@ -281,6 +386,20 @@ void DatagramTunneler::runServer() {
         if(sendto(udp_socket_.get(), reinterpret_cast<const char*>(tunnel_pkt.databuf_.data()), tunnel_pkt.datalen_, kNoSignalFlag, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
             DEATH("Unable to publish multicast data, sendto() error %d!", lastSocketError());
         }
+        recordDatagram(tunnel_pkt.datalen_);
+
+        const uint64_t server_timestamp_us = currentTimestampMicroseconds();
+        double latency_ms = 0.0;
+        bool latency_available = false;
+        if (server_timestamp_us < tunnel_pkt.client_timestamp_us_) {
+            WARN("Client timestamp is ahead of the server clock; latency is unavailable for this datagram.");
+        } else {
+            latency_ms = static_cast<double>(server_timestamp_us - tunnel_pkt.client_timestamp_us_) / 1000.0;
+            latency_available = true;
+            recordLatency(latency_ms);
+            latency_statistics.record(latency_ms);
+            latency_statistics.reportIfDue();
+        }
 
         //Getting group on which the datagram was published on client side
         char clt_grp_ip[INET_ADDRSTRLEN];
@@ -289,7 +408,20 @@ void DatagramTunneler::runServer() {
         //Getting group on which the server is publishing the forwared datagrams
         char pub_grp_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &pub_group.sin_addr, pub_grp_ip, INET_ADDRSTRLEN);
-        INFO("Published to %s:%u a %u byte datagram tunneled by client. Client side group was %s:%u",
-        pub_grp_ip, ntohs(pub_group.sin_port), tunnel_pkt.datalen_, clt_grp_ip, tunnel_pkt.udp_dst_port_);
+        if (latency_available) {
+            if (compactOutputEnabled()) {
+                logCompactMessage(LogLevel::Info, "published %u B | %.3f ms", tunnel_pkt.datalen_, latency_ms);
+            } else {
+                INFO("Published to %s:%u a %u byte datagram tunneled by client. Client side group was %s:%u. Latency: %.3f ms",
+                     pub_grp_ip, ntohs(pub_group.sin_port), tunnel_pkt.datalen_, clt_grp_ip, tunnel_pkt.udp_dst_port_, latency_ms);
+            }
+        } else {
+            if (compactOutputEnabled()) {
+                logCompactMessage(LogLevel::Warning, "published %u B | latency unavailable (client clock ahead)", tunnel_pkt.datalen_);
+            } else {
+                INFO("Published to %s:%u a %u byte datagram tunneled by client. Client side group was %s:%u. Latency: unavailable (client clock ahead)",
+                     pub_grp_ip, ntohs(pub_group.sin_port), tunnel_pkt.datalen_, clt_grp_ip, tunnel_pkt.udp_dst_port_);
+            }
+        }
     }
 }

@@ -37,6 +37,9 @@ connection per process. Discovery protocols that require replies need a
 separate return path. The TCP connection is not encrypted or authenticated, so
 run it on a trusted network or inside a secure overlay such as WireGuard or SSH.
 
+See the [practical tutorials](docs/use-cases.md) for multicast relaying,
+telemetry, and remote discovery-testing examples.
+
 ## Install
 
 ### Debian and Ubuntu
@@ -47,12 +50,12 @@ Check your Debian architecture:
 dpkg --print-architecture
 ```
 
-The latest published release is **v1.0.0**. It currently provides a Debian
+The latest published release is **v2.0.0**. It currently provides a Debian
 package for AMD64 (`amd64`/`x86_64`):
 
 ```sh
-curl -fLO https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v1.0.0/dgramtunneler_1.0.0_amd64.deb
-sudo apt install ./dgramtunneler_1.0.0_amd64.deb
+curl -fLO https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v2.0.0/dgramtunneler_2.0.0_amd64.deb
+sudo apt install ./dgramtunneler_2.0.0_amd64.deb
 dgramtunneler --version
 ```
 
@@ -81,7 +84,7 @@ The latest release currently provides a Windows AMD64 ZIP. Download and verify
 it from PowerShell:
 
 ```powershell
-$version = "1.0.0"
+$version = "2.0.0"
 Invoke-WebRequest `
   -Uri "https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v$version/dgramtunneler-$version-Windows-AMD64.zip" `
   -OutFile "dgramtunneler-$version-Windows-AMD64.zip"
@@ -102,7 +105,7 @@ cmake --build build-cmake
 cmake --install build-cmake --prefix ~/.local
 ```
 
-The legacy Makefile remains available with `make`, but CMake is the supported build and installation path.
+CMake is the supported build and installation path.
 
 ## First tunnel
 
@@ -114,13 +117,25 @@ dgramtunneler config edit
 dgramtunneler tunnel list
 ```
 
-Run an entry by alias:
+Run the server first, then the client:
 
 ```sh
+dgramtunneler tunnel run office-server
 dgramtunneler tunnel run office-client
 ```
 
+In a third terminal, generate five test datagrams for the client tunnel:
+
+```sh
+dgramtunneler producer office-client --count 5
+```
+
 Use `dgramtunneler tunnel show <alias>` to inspect the definition and `dgramtunneler tunnel validate [alias]` to check it before running.
+
+`producer <client-alias>` sends `Dummy datagram #1`, `Dummy datagram #2`, and
+so on to that client tunnel's configured multicast group. It defaults to one
+datagram per second until interrupted. Use `--count`, `--interval-ms`, and
+`--payload-prefix` to control a test run.
 
 ## Named tunnels
 
@@ -147,10 +162,52 @@ tcp_server = "192.168.1.10:14052"
 mode = "server"
 udp_interface = "192.168.1.10"
 tcp_listen_port = 14052
-udp_destination = "239.1.2.4:5000"
+udp_destination = "replicate_client"
 ```
 
 `config edit` creates the starter file if needed, then opens it using `$VISUAL`, `$EDITOR`, or TextEdit, `vi`, or Notepad. The parser rejects unknown fields, duplicate aliases, invalid IPv4 addresses, and invalid ports. `tunnel run` runs in the foreground.
+
+### Compact live output
+
+For a running tunnel, add `--compact` to keep one live statistics line and the
+five most recent events in the terminal:
+
+```sh
+dgramtunneler tunnel run office-client --compact
+```
+
+The built-in producer supports the same display:
+
+```sh
+dgramtunneler producer office-client --compact
+```
+
+The statistics show forwarded datagram count, average datagram size, and
+average throughput since the tunnel started. On a v2 server, they also show a
+rolling latency average, p50, p99, and maximum for the most recent 1,024
+datagrams. Compact mode activates only on an interactive terminal; when output
+is redirected, normal line-oriented logs are kept so they remain easy to
+capture and process. Its statistics line identifies the active client, server,
+or producer route; event lines use short actions such as `forwarded`,
+`published`, and `sent` rather than repeating the route for every datagram.
+
+### Latency telemetry
+
+Each DTEP v2 datagram carries the client wall-clock timestamp in microseconds.
+The server prints its per-datagram tunnel latency and, every five seconds,
+reports interval average, p50, p99, and maximum latency. These figures require
+the client and server clocks to be reasonably synchronized (for example, with
+NTP); a client clock ahead of the server is reported as unavailable rather than
+as a misleading negative latency.
+
+For server tunnels, `udp_destination = "replicate_client"` republishes to the
+same multicast group and port joined by the client. Omitting `udp_destination`
+retains the same legacy behaviour. Set it to an explicit `IPv4:port` endpoint
+when the destination network should use a different group. Client-group
+replication is for different source and destination subnets: using it on the
+same subnet can create a multicast feedback loop. The server disables its own
+local multicast loopback in replication mode, but it cannot prevent a separate
+client host on the same subnet from receiving and re-forwarding the packet.
 
 ## Direct command-line use
 
@@ -206,7 +263,7 @@ ctest --test-dir build-cmake --output-on-failure
 
 DatagramTunneler transfers multicast traffic from a subnet where a multicast group is available to one where it is not. It has a client and a server:
 
-![Datagram Tunneler](doc/diagram.png)
+![DatagramTunneler network flow](doc/network-flow.png)
 
 ### Client
 
@@ -218,22 +275,34 @@ Run the server on the destination subnet. It accepts one client connection, then
 
 ## DTEP
 
-DTEP (Datagram Tunneler Encapsulation Protocol) is the binary framing used over the TCP connection:
-![](doc/proto_pkt.png)
-
-A DTEP packet starts with a one-byte type field.
+DTEP (Datagram Tunneler Encapsulation Protocol) is the binary framing used over
+the TCP connection. The current protocol is **version 2**. Every frame starts
+with a one-byte packet type and a one-byte protocol version; a peer using a
+different version is rejected immediately with a clear error.
 
 ### `0x00` — Heartbeat
 
-The client sends heartbeats to confirm that the connection remains alive.
+The client sends a two-byte type/version heartbeat to confirm that the
+connection remains alive.
 
 ### `0x01` — Datagram
 
-This packet encapsulates a UDP datagram observed by the client:
-![](doc/proto_payload.png)
+This packet encapsulates a UDP datagram observed by the client. Its fixed
+18-byte header contains the following fields before the original payload:
+
+| Field | Size | Purpose |
+| --- | --- | --- |
+| Type | 1 byte | `0x01` (datagram) |
+| Protocol version | 1 byte | `0x02` |
+| UDP group address | 4 bytes | IPv4 multicast group joined by the client |
+| UDP group port | 2 bytes | Multicast port |
+| Datagram length | 2 bytes | Original payload length |
+| Client timestamp | 8 bytes | Unix epoch timestamp in microseconds |
 
 * **Datagram length:** payload length, excluding the DTEP header.
 * **UDP channel address and port:** the multicast group where the client received the datagram.
+* **Client timestamp:** used by the server to calculate tunnel latency when
+  both system clocks are synchronized.
 * **Encapsulated UDP datagram:** the original UDP payload.
 
 ## Licensing

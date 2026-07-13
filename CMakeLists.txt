@@ -20,6 +20,8 @@ add_executable(dgramtunneler
     src/CommandLine.cpp
     src/Configuration.cpp
     src/Network.cpp
+    src/LiveOutput.cpp
+    src/Producer.cpp
     src/DatagramTunneler.cpp)
 
 target_compile_features(dgramtunneler PRIVATE cxx_std_20)
@@ -76,6 +78,7 @@ if(BUILD_TESTING)
         src/CommandLine.cpp
         src/Configuration.cpp
         src/Network.cpp
+        src/LiveOutput.cpp
         src/DatagramTunneler.cpp)
     target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_20)
     set_target_properties(dgramtunneler_unit_tests PROPERTIES
@@ -109,12 +112,26 @@ if(BUILD_TESTING)
     add_test(NAME tunnel_list_command
         COMMAND dgramtunneler tunnel list --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml")
     set_tests_properties(tunnel_list_command PROPERTIES
-        PASS_REGULAR_EXPRESSION "Alias[ \\t]+Type[ \\t]+Equivalent direct command")
+        PASS_REGULAR_EXPRESSION "Alias[ \\t]+Mode[ \\t]+UDP group / destination[ \\t]+Equivalent direct command")
+
+    add_test(NAME tunnel_show_replica_command
+        COMMAND dgramtunneler tunnel show replica-server --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml")
+    set_tests_properties(tunnel_show_replica_command PROPERTIES
+        PASS_REGULAR_EXPRESSION "udp_destination = replicate_client")
+
+    add_test(NAME producer_command
+        COMMAND dgramtunneler producer example-client --compact --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml" --count 2 --interval-ms 1)
+    set_tests_properties(producer_command PROPERTIES
+        PASS_REGULAR_EXPRESSION "Sent Dummy datagram #2")
 
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME tunnel_round_trip
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tunnel_round_trip.py" "$<TARGET_FILE:dgramtunneler>")
         set_tests_properties(tunnel_round_trip PROPERTIES TIMEOUT 15)
+
+        add_test(NAME replicate_client_loopback
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tunnel_round_trip.py" "$<TARGET_FILE:dgramtunneler>" --replicate-client)
+        set_tests_properties(replicate_client_loopback PROPERTIES TIMEOUT 15)
     endif()
 endif()

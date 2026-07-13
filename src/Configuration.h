@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <istream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "DatagramTunneler.h"
@@ -15,6 +16,8 @@ struct NamedTunnel {
 struct TunnelConfiguration {
     std::vector<NamedTunnel> tunnels;
 };
+
+inline constexpr std::string_view kReplicateClientDestination = "replicate_client";
 
 std::filesystem::path defaultConfigurationPath();
 TunnelConfiguration parseConfiguration(std::istream& input);
