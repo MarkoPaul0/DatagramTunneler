@@ -4,9 +4,18 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vMAJOR.MINOR.PATCH tag to publish
+        required: true
+        type: string
 
 permissions:
   contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
   verify-version:
@@ -18,12 +27,14 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Validate tag and VERSION
         id: version
         shell: bash
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="$RELEASE_TAG"
           version="$(tr -d '\r\n' < VERSION)"
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Release tag must use vMAJOR.MINOR.PATCH, got: $tag" >&2
@@ -55,6 +66,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Configure CMake
         run: cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
@@ -89,6 +102,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Configure CMake
         run: cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
@@ -147,14 +162,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "DatagramTunneler $RELEASE_TAG" \
+            --generate-notes
+
+      - name: Upload release archives
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           mapfile -d '' artifacts < <(find release-artifacts -type f -print0)
           if [[ "${#artifacts[@]}" -eq 0 ]]; then
             echo "No release artifacts were downloaded." >&2
             exit 1
           fi
-          gh release create "${GITHUB_REF_NAME}" \
+          gh release upload "$RELEASE_TAG" \
             --repo "${GITHUB_REPOSITORY}" \
-            --verify-tag \
-            --title "DatagramTunneler ${GITHUB_REF_NAME}" \
-            --generate-notes \
+            --clobber \
             "${artifacts[@]}"
