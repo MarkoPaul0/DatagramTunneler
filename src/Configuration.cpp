@@ -133,7 +133,7 @@ NamedTunnel makeTunnel(const std::string& alias, const TunnelFields& fields) {
         tunnel.config.is_client_ = false;
         tunnel.config.tcp_srv_port_ = parsePort(requiredField(fields, "tcp_listen_port", alias), "tcp_listen_port");
         const auto destination = fields.find("udp_destination");
-        tunnel.config.use_clt_grp_ = destination == fields.end();
+        tunnel.config.use_clt_grp_ = destination == fields.end() || destination->second == kReplicateClientDestination;
         if (!tunnel.config.use_clt_grp_) {
             const auto [address, port] = parseEndpoint(destination->second, "udp_destination");
             tunnel.config.udp_dst_ip_ = address;
@@ -265,7 +265,7 @@ tcp_server = "192.168.1.10:14052"
 mode = "server"
 udp_interface = "192.168.1.10"
 tcp_listen_port = 14052
-udp_destination = "239.1.2.4:5000"
+udp_destination = "replicate_client"
 )";
 }
 

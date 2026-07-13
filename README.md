@@ -162,10 +162,15 @@ tcp_server = "192.168.1.10:14052"
 mode = "server"
 udp_interface = "192.168.1.10"
 tcp_listen_port = 14052
-udp_destination = "239.1.2.4:5000"
+udp_destination = "replicate_client"
 ```
 
 `config edit` creates the starter file if needed, then opens it using `$VISUAL`, `$EDITOR`, or TextEdit, `vi`, or Notepad. The parser rejects unknown fields, duplicate aliases, invalid IPv4 addresses, and invalid ports. `tunnel run` runs in the foreground.
+
+For server tunnels, `udp_destination = "replicate_client"` republishes to the
+same multicast group and port joined by the client. Omitting `udp_destination`
+retains the same legacy behaviour. Set it to an explicit `IPv4:port` endpoint
+when the destination network should use a different group.
 
 ## Direct command-line use
 

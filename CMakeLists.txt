@@ -112,6 +112,11 @@ if(BUILD_TESTING)
     set_tests_properties(tunnel_list_command PROPERTIES
         PASS_REGULAR_EXPRESSION "Alias[ \\t]+Type[ \\t]+Equivalent direct command")
 
+    add_test(NAME tunnel_show_replica_command
+        COMMAND dgramtunneler tunnel show replica-server --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml")
+    set_tests_properties(tunnel_show_replica_command PROPERTIES
+        PASS_REGULAR_EXPRESSION "udp_destination = replicate_client")
+
     add_test(NAME producer_command
         COMMAND dgramtunneler producer example-client --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml" --count 2 --interval-ms 1)
     set_tests_properties(producer_command PROPERTIES

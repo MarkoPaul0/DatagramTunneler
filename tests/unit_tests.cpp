@@ -73,19 +73,34 @@ mode = "server"
 udp_interface = "127.0.0.1"
 tcp_listen_port = 14052
 udp_destination = "239.1.2.4:5000"
+
+[tunnels.replica-server]
+mode = "server"
+udp_interface = "127.0.0.1"
+tcp_listen_port = 14053
+udp_destination = "replicate_client"
+
+[tunnels.legacy-server]
+mode = "server"
+udp_interface = "127.0.0.1"
+tcp_listen_port = 14054
 )");
 
     const TunnelConfiguration configuration = parseConfiguration(input);
-    if (!expect(configuration.tunnels.size() == 2, "both named tunnels must be loaded")) {
+    if (!expect(configuration.tunnels.size() == 4, "all named tunnels must be loaded")) {
         return false;
     }
 
     const NamedTunnel& client = findTunnel(configuration, "office-client");
     const NamedTunnel& server = findTunnel(configuration, "office-server");
+    const NamedTunnel& replica = findTunnel(configuration, "replica-server");
+    const NamedTunnel& legacy = findTunnel(configuration, "legacy-server");
     return expect(client.config.is_client_, "client tunnel mode must be selected") &&
            expect(client.config.tcp_srv_port_ == 14052, "client server port must be parsed") &&
            expect(!server.config.is_client_, "server tunnel mode must be selected") &&
-           expect(server.config.udp_dst_port_ == 5000, "server destination port must be parsed");
+           expect(server.config.udp_dst_port_ == 5000, "server destination port must be parsed") &&
+           expect(replica.config.use_clt_grp_, "explicit replica server must use the client group") &&
+           expect(legacy.config.use_clt_grp_, "server without a destination must retain legacy client-group behavior");
 }
 
 bool testInvalidNamedTunnelConfiguration() {

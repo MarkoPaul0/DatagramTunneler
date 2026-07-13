@@ -296,7 +296,9 @@ void printTunnel(const NamedTunnel& tunnel) {
         printf("  tcp_server = %s:%u\n", tunnel.config.tcp_srv_ip_.c_str(), static_cast<unsigned int>(tunnel.config.tcp_srv_port_));
     } else {
         printf("  tcp_listen_port = %u\n", static_cast<unsigned int>(tunnel.config.tcp_srv_port_));
-        if (!tunnel.config.use_clt_grp_) {
+        if (tunnel.config.use_clt_grp_) {
+            printf("  udp_destination = %s\n", kReplicateClientDestination.data());
+        } else {
             printf("  udp_destination = %s:%u\n", tunnel.config.udp_dst_ip_.c_str(), static_cast<unsigned int>(tunnel.config.udp_dst_port_));
         }
     }
