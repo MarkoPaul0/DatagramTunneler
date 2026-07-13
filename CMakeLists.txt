@@ -20,6 +20,7 @@ add_executable(dgramtunneler
     src/CommandLine.cpp
     src/Configuration.cpp
     src/Network.cpp
+    src/LiveOutput.cpp
     src/Producer.cpp
     src/DatagramTunneler.cpp)
 
@@ -77,6 +78,7 @@ if(BUILD_TESTING)
         src/CommandLine.cpp
         src/Configuration.cpp
         src/Network.cpp
+        src/LiveOutput.cpp
         src/DatagramTunneler.cpp)
     target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_20)
     set_target_properties(dgramtunneler_unit_tests PROPERTIES
@@ -118,7 +120,7 @@ if(BUILD_TESTING)
         PASS_REGULAR_EXPRESSION "udp_destination = replicate_client")
 
     add_test(NAME producer_command
-        COMMAND dgramtunneler producer example-client --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml" --count 2 --interval-ms 1)
+        COMMAND dgramtunneler producer example-client --compact --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml" --count 2 --interval-ms 1)
     set_tests_properties(producer_command PROPERTIES
         PASS_REGULAR_EXPRESSION "Sent Dummy datagram #2")
 

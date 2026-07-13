@@ -167,6 +167,26 @@ udp_destination = "replicate_client"
 
 `config edit` creates the starter file if needed, then opens it using `$VISUAL`, `$EDITOR`, or TextEdit, `vi`, or Notepad. The parser rejects unknown fields, duplicate aliases, invalid IPv4 addresses, and invalid ports. `tunnel run` runs in the foreground.
 
+### Compact live output
+
+For a running tunnel, add `--compact` to keep one live statistics line and the
+five most recent events in the terminal:
+
+```sh
+dgramtunneler tunnel run office-client --compact
+```
+
+The built-in producer supports the same display:
+
+```sh
+dgramtunneler producer office-client --compact
+```
+
+The statistics show forwarded datagram count, average datagram size, and
+average throughput since the tunnel started. Compact mode activates only on an
+interactive terminal; when output is redirected, normal line-oriented logs are
+kept so they remain easy to capture and process.
+
 For server tunnels, `udp_destination = "replicate_client"` republishes to the
 same multicast group and port joined by the client. Omitting `udp_destination`
 retains the same legacy behaviour. Set it to an explicit `IPv4:port` endpoint

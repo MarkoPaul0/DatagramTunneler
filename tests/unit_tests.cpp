@@ -59,6 +59,24 @@ bool testClientCommandLineParsing() {
            expect(config.udp_dst_port_ == 5000, "multicast port must be parsed");
 }
 
+bool testCompactCommandLineParsing() {
+    char binary[] = "dgramtunneler";
+    char client[] = "--client";
+    char udp_interface[] = "-i";
+    char interface_address[] = "127.0.0.1";
+    char tcp_server[] = "-t";
+    char tcp_address[] = "127.0.0.1:14052";
+    char udp_group[] = "-u";
+    char multicast_address[] = "239.1.2.3:5000";
+    char compact[] = "--compact";
+    char* argv[] = {binary, client, udp_interface, interface_address, tcp_server, tcp_address,
+                    udp_group, multicast_address, compact, nullptr};
+
+    DatagramTunneler::Config config;
+    return expect(parseCommandLineConfig(9, argv, &config), "compact client command line must parse") &&
+           expect(config.compact_output_, "--compact must enable compact output");
+}
+
 bool testNamedTunnelConfiguration() {
     std::istringstream input(R"(version = 1
 
@@ -130,7 +148,7 @@ int main() {
         std::fprintf(stderr, "Test failure: network initialization failed (%d)\n", network_error);
         return 1;
     }
-    return testProtocolFraming() && testClientCommandLineParsing() && testNamedTunnelConfiguration() &&
+    return testProtocolFraming() && testClientCommandLineParsing() && testCompactCommandLineParsing() && testNamedTunnelConfiguration() &&
                    testInvalidNamedTunnelConfiguration()
                ? 0
                : 1;

@@ -80,6 +80,7 @@ void DatagramProducer::run() {
             throw std::runtime_error("could not send dummy datagram (error " + std::to_string(lastSocketError()) + ")");
         }
 
+        recordDatagram(static_cast<std::size_t>(bytes_sent));
         INFO("Sent %s", payload.c_str());
         if (options_.count == 0 || number < options_.count) {
             std::this_thread::sleep_for(std::chrono::milliseconds(options_.interval_ms));

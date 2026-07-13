@@ -172,6 +172,9 @@ void DatagramTunneler::runClient() {
         if(!sendTCPData(tcp_socket_.get(), &tunnel_pkt, tunnel_pkt.size(), kNoSignalFlag)) {
             DEATH("Unable to send data to server! Error %d", lastSocketError());
         }
+        if (tunnel_pkt.type_ == TunnelPacketType::Datagram) {
+            recordDatagram(tunnel_pkt.datalen_);
+        }
     }
 }
 //------------------------------------------------------------------------------------------------
@@ -290,6 +293,7 @@ void DatagramTunneler::runServer() {
         if(sendto(udp_socket_.get(), reinterpret_cast<const char*>(tunnel_pkt.databuf_.data()), tunnel_pkt.datalen_, kNoSignalFlag, reinterpret_cast<struct sockaddr*>(&pub_group), sizeof(pub_group)) < 0) {
             DEATH("Unable to publish multicast data, sendto() error %d!", lastSocketError());
         }
+        recordDatagram(tunnel_pkt.datalen_);
 
         //Getting group on which the datagram was published on client side
         char clt_grp_ip[INET_ADDRSTRLEN];
