@@ -1,6 +1,7 @@
 # DatagramTunneler
 ![Author](https://img.shields.io/badge/author-MarkoPaul0-red.svg?style=flat-square)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0.en.html)
+[![Latest release](https://img.shields.io/github/v/release/MarkoPaul0/DatagramTunneler?style=flat-square)](https://github.com/MarkoPaul0/DatagramTunneler/releases/latest)
 ![GitHub last commit](https://img.shields.io/github/last-commit/MarkoPaul0/DatagramTunneler.svg?style=flat-square&maxAge=300)
 ![Stars](https://img.shields.io/github/stars/MarkoPaul0/DatagramTunneler.svg?style=social)
 
@@ -13,10 +14,12 @@ It supports current Linux, macOS, and Windows 10/11 releases, direct command-lin
 Use DatagramTunneler when a multicast-dependent application needs to cross a
 routed, site-to-site, or test-network boundary. Typical uses include:
 
-- relaying UDP multicast telemetry between two networks;
-- testing multicast applications from a remote environment; and
-- extending LAN-discovery traffic to a second subnet where the source group is
-  otherwise unavailable.
+- relaying industrial, IoT, or monitoring telemetry to another network;
+- feeding simulation, robotics, or hardware-in-the-loop test environments;
+- testing multicast applications from a remote development or CI environment;
+- sending one-way LAN-discovery announcements to a second subnet; and
+- relaying a multicast feed to remote diagnostic, capture, or observability
+  tooling.
 
 ### DatagramTunneler and generic tunnels
 
@@ -29,17 +32,39 @@ behaviour can make it unsuitable for latency-sensitive real-time game traffic.
 It is a better fit for multicast-dependent workflows such as LAN discovery,
 telemetry, and cross-subnet testing.
 
+The current tunnel is one-way from client to server and carries one client
+connection per process. Discovery protocols that require replies need a
+separate return path. The TCP connection is not encrypted or authenticated, so
+run it on a trusted network or inside a secure overlay such as WireGuard or SSH.
+
 ## Install
 
 ### Debian and Ubuntu
 
-Download the Debian package from the [latest release](https://github.com/MarkoPaul0/DatagramTunneler/releases/latest), then install it with `apt`:
+Check your Debian architecture:
 
 ```sh
-sudo apt install ./dgramtunneler_<version>-1_<architecture>.deb
+dpkg --print-architecture
 ```
 
-On Linux, the release build produces this `.deb` package alongside portable `.tar.gz` and `.zip` archives.
+The latest published release is **v1.0.0**. It currently provides a Debian
+package for AMD64 (`amd64`/`x86_64`):
+
+```sh
+curl -fLO https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v1.0.0/dgramtunneler_1.0.0_amd64.deb
+sudo apt install ./dgramtunneler_1.0.0_amd64.deb
+dgramtunneler --version
+```
+
+| Debian architecture | CPU name | Package |
+| --- | --- | --- |
+| `amd64` | Intel/AMD 64-bit (`x86_64`) | Available |
+| `arm64`, `armhf`, `i386` | ARM or 32-bit Intel/AMD | Not currently published |
+
+For an architecture without a `.deb`, use the [source build](#build-from-source).
+Do not install the `amd64` package on a different architecture. The
+[latest release](https://github.com/MarkoPaul0/DatagramTunneler/releases/latest)
+also contains portable Linux archives for the architectures listed there.
 
 ### macOS and Linux: Homebrew
 
@@ -52,13 +77,20 @@ brew install dgramtunneler
 
 ### Windows 10 and 11
 
-Download the Windows AMD64 ZIP from the [latest release](https://github.com/MarkoPaul0/DatagramTunneler/releases/latest). Extract it, add its `bin` directory to `PATH`, and run:
+The latest release currently provides a Windows AMD64 ZIP. Download and verify
+it from PowerShell:
 
 ```powershell
-dgramtunneler.exe --version
+$version = "1.0.0"
+Invoke-WebRequest `
+  -Uri "https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v$version/dgramtunneler-$version-Windows-AMD64.zip" `
+  -OutFile "dgramtunneler-$version-Windows-AMD64.zip"
+Expand-Archive "dgramtunneler-$version-Windows-AMD64.zip" -DestinationPath dgramtunneler
+& ".\dgramtunneler\dgramtunneler-$version-Windows-AMD64\bin\dgramtunneler.exe" --version
 ```
 
-Winget, Chocolatey, and Scoop packages are not published yet.
+Add that `bin` directory to `PATH` for normal use. Windows ARM64, Winget,
+Chocolatey, and Scoop packages are not published yet.
 
 ### Build from source
 
