@@ -50,12 +50,12 @@ Check your Debian architecture:
 dpkg --print-architecture
 ```
 
-The latest published release is **v1.0.0**. It currently provides a Debian
+The latest published release is **v2.0.0**. It currently provides a Debian
 package for AMD64 (`amd64`/`x86_64`):
 
 ```sh
-curl -fLO https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v1.0.0/dgramtunneler_1.0.0_amd64.deb
-sudo apt install ./dgramtunneler_1.0.0_amd64.deb
+curl -fLO https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v2.0.0/dgramtunneler_2.0.0_amd64.deb
+sudo apt install ./dgramtunneler_2.0.0_amd64.deb
 dgramtunneler --version
 ```
 
@@ -84,7 +84,7 @@ The latest release currently provides a Windows AMD64 ZIP. Download and verify
 it from PowerShell:
 
 ```powershell
-$version = "1.0.0"
+$version = "2.0.0"
 Invoke-WebRequest `
   -Uri "https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v$version/dgramtunneler-$version-Windows-AMD64.zip" `
   -OutFile "dgramtunneler-$version-Windows-AMD64.zip"
