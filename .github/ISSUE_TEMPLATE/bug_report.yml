@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible problem with DatagramTunneler.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a problem.
+
+        Do not include security-sensitive details here. Follow the
+        [security policy](https://github.com/MarkoPaul0/DatagramTunneler/blob/master/SECURITY.md)
+        instead.
+  - type: input
+    id: version
+    attributes:
+      label: DatagramTunneler version
+      description: Include the output of `dgramtunneler --version`.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed result and its impact.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide a minimal configuration and command sequence.
+      placeholder: |
+        1. Run ...
+        2. Send ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or additional context
+      description: Remove credentials, private addresses, and other sensitive data.

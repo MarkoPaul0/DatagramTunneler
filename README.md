@@ -4,9 +4,30 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/MarkoPaul0/DatagramTunneler.svg?style=flat-square&maxAge=300)
 ![Stars](https://img.shields.io/github/stars/MarkoPaul0/DatagramTunneler.svg?style=social)
 
-DatagramTunneler forwards UDP multicast datagrams through a TCP connection. A client joins a multicast group, forwards received datagrams to a server, and the server republishes them on its own subnet.
+DatagramTunneler tunnels UDP multicast datagrams over a TCP connection. A client joins a multicast group, forwards received datagrams to a server, and the server republishes them on its own subnet.
 
 It supports current Linux, macOS, and Windows 10/11 releases, direct command-line use, and reusable named tunnel definitions.
+
+## What it is for
+
+Use DatagramTunneler when a multicast-dependent application needs to cross a
+routed, site-to-site, or test-network boundary. Typical uses include:
+
+- relaying UDP multicast telemetry between two networks;
+- testing multicast applications from a remote environment; and
+- extending LAN-discovery traffic to a second subnet where the source group is
+  otherwise unavailable.
+
+### DatagramTunneler and generic tunnels
+
+DatagramTunneler solves a different problem from generic public-endpoint tools
+such as ngrok. It relays UDP multicast that the client can already receive; it
+does not expose a local service to the public Internet, perform NAT traversal,
+or provide a low-latency UDP transport. TCP's ordering and retransmission
+behaviour can make it unsuitable for latency-sensitive real-time game traffic.
+
+It is a better fit for multicast-dependent workflows such as LAN discovery,
+telemetry, and cross-subnet testing.
 
 ## Install
 
