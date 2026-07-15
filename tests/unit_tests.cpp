@@ -14,6 +14,7 @@
 #include "Network.h"
 #include "Protocol.h"
 #include "control/ControlService.h"
+#include "control/ControlApi.h"
 #include "control/ManagedTunnelRuntime.h"
 
 namespace {
@@ -208,6 +209,18 @@ bool testManagedProducerRuntime() {
     return expect(false, "managed producer must reach a stopped state");
 }
 
+bool testControlApiContract() {
+    const control::api::ProducerStartRequest defaults;
+    return expect(control::api::kVersion == "v1", "control API must expose its version") &&
+           expect(control::api::tunnelActionPath("example-client", "start") == "/api/v1/tunnels/example-client/start",
+                  "control API must define tunnel lifecycle paths") &&
+           expect(control::api::producerActionPath("example-client", "start") ==
+                      "/api/v1/tunnels/example-client/producer/start",
+                  "control API must define producer lifecycle paths") &&
+           expect(defaults.interval_milliseconds == 1000 && !defaults.count.has_value(),
+                  "control API producer defaults must be safe");
+}
+
 } // namespace
 
 
@@ -219,6 +232,7 @@ int main() {
     }
     return testProtocolFraming() && testClientCommandLineParsing() && testCompactCommandLineParsing() && testNamedTunnelConfiguration() &&
                    testInvalidNamedTunnelConfiguration() && testControlServiceCatalog() && testManagedProducerRuntime()
+                   && testControlApiContract()
                ? 0
                : 1;
 }
