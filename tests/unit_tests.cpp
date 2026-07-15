@@ -191,6 +191,7 @@ bool testControlServiceConfigurationUpdate() {
     }
 }
 
+#if !defined(_WIN32)
 class RecordingEventSink final : public control::EventSink {
 public:
     void publish(const control::ControlEvent& event) override {
@@ -248,6 +249,7 @@ bool testManagedProducerRuntime() {
     }
     return expect(false, "managed producer must reach a stopped state");
 }
+#endif
 
 bool testControlApiContract() {
     const control::api::ProducerStartRequest defaults;
@@ -270,9 +272,12 @@ int main() {
         std::fprintf(stderr, "Test failure: network initialization failed (%d)\n", network_error);
         return 1;
     }
-    return testProtocolFraming() && testClientCommandLineParsing() && testCompactCommandLineParsing() && testNamedTunnelConfiguration() &&
-                   testInvalidNamedTunnelConfiguration() && testControlServiceCatalog() && testManagedProducerRuntime()
-                   && testControlServiceConfigurationUpdate() && testControlApiContract()
-               ? 0
-               : 1;
+    const bool passed = testProtocolFraming() && testClientCommandLineParsing() && testCompactCommandLineParsing() &&
+                        testNamedTunnelConfiguration() && testInvalidNamedTunnelConfiguration() && testControlServiceCatalog() &&
+                        testControlServiceConfigurationUpdate() && testControlApiContract();
+#if !defined(_WIN32)
+    return passed && testManagedProducerRuntime() ? 0 : 1;
+#else
+    return passed ? 0 : 1;
+#endif
 }

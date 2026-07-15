@@ -23,8 +23,33 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 file(READ "${DGRAMTUNNELER_WEB_DIR}/index.html" DGRAMTUNNELER_WEB_INDEX)
 file(READ "${DGRAMTUNNELER_WEB_DIR}/styles.css" DGRAMTUNNELER_WEB_STYLES)
 file(READ "${DGRAMTUNNELER_WEB_DIR}/app.js" DGRAMTUNNELER_WEB_SCRIPT)
+
+# MSVC limits the size of an individual source string literal. Keep the
+# control UI embedded in the executable, but emit each asset as adjacent raw
+# string literals that are safely below that limit.
+function(dgramtunneler_embed_web_asset output content)
+    set(result "")
+    string(LENGTH "${content}" content_length)
+    set(offset 0)
+    while(offset LESS content_length)
+        math(EXPR remaining "${content_length} - ${offset}")
+        if(remaining GREATER 8192)
+            set(chunk_length 8192)
+        else()
+            set(chunk_length ${remaining})
+        endif()
+        string(SUBSTRING "${content}" ${offset} ${chunk_length} chunk)
+        string(APPEND result "R\"DGRAM(${chunk})DGRAM\"\n")
+        math(EXPR offset "${offset} + ${chunk_length}")
+    endwhile()
+    set(${output} "${result}" PARENT_SCOPE)
+endfunction()
+
+dgramtunneler_embed_web_asset(DGRAMTUNNELER_WEB_INDEX_LITERAL "${DGRAMTUNNELER_WEB_INDEX}")
+dgramtunneler_embed_web_asset(DGRAMTUNNELER_WEB_STYLES_LITERAL "${DGRAMTUNNELER_WEB_STYLES}")
+dgramtunneler_embed_web_asset(DGRAMTUNNELER_WEB_SCRIPT_LITERAL "${DGRAMTUNNELER_WEB_SCRIPT}")
 file(MAKE_DIRECTORY "${DGRAMTUNNELER_GENERATED_INCLUDE_DIR}/control")
-file(WRITE "${DGRAMTUNNELER_WEB_ASSETS_HEADER}" "#pragma once\n\n#include <string_view>\n\nnamespace control::web_assets {\ninline constexpr std::string_view kIndexHtml = R\"DGRAM(\n${DGRAMTUNNELER_WEB_INDEX}\n)DGRAM\";\ninline constexpr std::string_view kStylesCss = R\"DGRAM(\n${DGRAMTUNNELER_WEB_STYLES}\n)DGRAM\";\ninline constexpr std::string_view kAppJs = R\"DGRAM(\n${DGRAMTUNNELER_WEB_SCRIPT}\n)DGRAM\";\n} // namespace control::web_assets\n")
+file(WRITE "${DGRAMTUNNELER_WEB_ASSETS_HEADER}" "#pragma once\n\n#include <string_view>\n\nnamespace control::web_assets {\ninline constexpr std::string_view kIndexHtml =\n${DGRAMTUNNELER_WEB_INDEX_LITERAL};\ninline constexpr std::string_view kStylesCss =\n${DGRAMTUNNELER_WEB_STYLES_LITERAL};\ninline constexpr std::string_view kAppJs =\n${DGRAMTUNNELER_WEB_SCRIPT_LITERAL};\n} // namespace control::web_assets\n")
 
 include(GNUInstallDirs)
 
