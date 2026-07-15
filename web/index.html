@@ -23,13 +23,18 @@
     <main id="main">
       <section class="hero">
         <div>
-          <p class="eyebrow">LOCAL CONTROL PLANE · V1</p>
-          <h1>See every route.<br><em>Move with confidence.</em></h1>
-          <p class="lede">Operate named multicast tunnels, launch test producers, and watch lifecycle events without leaving your local machine.</p>
+          <p class="eyebrow">DGRAMTUNNELER / LOCAL CONTROL / API V1</p>
+          <h1>Tunnel control<br><em>console.</em></h1>
+          <p class="lede">Start and stop named tunnels, send test datagrams, and inspect local runtime state.</p>
         </div>
-        <div class="hero-meta">
-          <span>BOUND TO</span><strong>127.0.0.1</strong>
-          <span>REFRESH</span><strong>2 seconds</strong>
+        <div class="flow-legend" aria-label="Tunnel data flow">
+          <span class="flow-title">DATA FLOW</span>
+          <div class="flow-step ingress"><b>INGRESS</b><small>TCP client<br>multicast input</small></div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step transit"><b>TCP TUNNEL</b><small>ordered stream</small></div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step egress"><b>EGRESS</b><small>TCP server<br>multicast output</small></div>
+          <p>Bound to <strong>127.0.0.1</strong></p>
         </div>
       </section>
 

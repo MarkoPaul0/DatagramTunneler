@@ -26,6 +26,16 @@
     return state.runtimes.get(`${kind}:${alias}`) || { state: 'stopped', detail: 'Not started' };
   }
 
+  function tunnelRole(mode) {
+    return mode === 'client'
+      ? { name: 'Ingress', detail: 'TCP client', className: 'ingress' }
+      : { name: 'Egress', detail: 'TCP server', className: 'egress' };
+  }
+
+  function tunnelFor(alias) {
+    return state.tunnels.find((tunnel) => tunnel.alias === alias);
+  }
+
   function renderTunnels() {
     if (!state.tunnels.length) {
       tunnelGrid.innerHTML = '<div class="empty-state">No named tunnels are configured.</div>';
@@ -33,8 +43,9 @@
     }
     tunnelGrid.innerHTML = state.tunnels.map((tunnel) => {
       const runtime = runtimeFor(tunnel.alias);
+      const role = tunnelRole(tunnel.mode);
       return `<article class="tunnel-card">
-        <div class="tunnel-top"><span class="mode-pill">${escapeHtml(tunnel.mode)}</span><span class="runtime-state ${escapeHtml(runtime.state)}">${escapeHtml(runtime.state)}</span></div>
+        <div class="tunnel-top"><span class="mode-pill ${role.className}">${role.name} <small>· ${role.detail}</small></span><span class="runtime-state ${escapeHtml(runtime.state)}">${escapeHtml(runtime.state)}</span></div>
         <h3>${escapeHtml(tunnel.alias)}</h3>
         <p class="destination">UDP DESTINATION<br><b>${escapeHtml(tunnel.udp_destination)}</b></p>
         <p class="destination">${escapeHtml(runtime.detail || 'Not started')}</p>
@@ -60,8 +71,12 @@
     eventList.innerHTML = state.events.map((item) => {
       const time = new Date(item.timestamp_unix_milliseconds || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const kind = item.snapshot?.kind || 'service';
-      const label = kind === 'producer' ? 'Producer' : kind === 'tunnel' ? 'Tunnel' : 'Service';
-      return `<li class="${escapeHtml(item.severity || 'info')}"><time>${time}</time><p><span class="event-kind ${escapeHtml(kind)}">${label}</span><b>${escapeHtml(item.alias || 'service')}</b> ${escapeHtml(item.message || 'updated')}</p></li>`;
+      const definition = kind === 'tunnel' ? tunnelFor(item.alias) : null;
+      const role = definition ? tunnelRole(definition.mode) : null;
+      const label = kind === 'producer' ? 'Producer' : role?.name || 'Service';
+      const detail = kind === 'producer' ? 'test signal' : role?.detail || '';
+      const className = kind === 'producer' ? 'producer' : role?.className || 'service';
+      return `<li class="${escapeHtml(item.severity || 'info')}"><time>${time}</time><p><span class="event-kind ${escapeHtml(className)}">${label}${detail ? `<small>${detail}</small>` : ''}</span><b>${escapeHtml(item.alias || 'service')}</b> ${escapeHtml(item.message || 'updated')}</p></li>`;
     }).join('');
   }
 
