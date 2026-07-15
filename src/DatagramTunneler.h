@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <stop_token>
 #include <string>
 
@@ -9,9 +11,13 @@
 
 class DatagramTunneler {
 public:
+    struct DatagramObservation {
+        std::size_t bytes = 0;
+        std::optional<double> latency_milliseconds;
+    };
+
     struct RuntimeObserver {
-        std::function<void(std::size_t)> on_datagram;
-        std::function<void(double)> on_latency;
+        std::function<void(const DatagramObservation&)> on_datagram;
     };
 
     struct Config {

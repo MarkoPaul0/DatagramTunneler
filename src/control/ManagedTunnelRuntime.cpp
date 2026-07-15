@@ -58,7 +58,7 @@ void ManagedTunnelRuntime::startTunnel(std::string alias) {
 
     const WorkerPtr worker = std::make_shared<Worker>();
     worker->key = key;
-    worker->snapshot = {alias, RuntimeKind::Tunnel, TunnelState::Starting, {}, "Starting"};
+    worker->snapshot = {alias, RuntimeKind::Tunnel, TunnelState::Starting, {}, {}, "Starting"};
     {
         const std::lock_guard<std::mutex> lock(mutex_);
         workers_.emplace(key, worker);
@@ -71,8 +71,9 @@ void ManagedTunnelRuntime::startTunnel(std::string alias) {
             transition(worker, TunnelState::Running, "Running");
             try {
                 DatagramTunneler::RuntimeObserver observer;
-                observer.on_datagram = [this, worker](std::size_t bytes) { recordDatagram(worker, bytes); };
-                observer.on_latency = [this, worker](double milliseconds) { recordLatency(worker, milliseconds); };
+                observer.on_datagram = [this, worker](const DatagramTunneler::DatagramObservation& observation) {
+                    recordDatagram(worker, observation);
+                };
                 DatagramTunneler tunneler(config, std::move(observer));
                 tunneler.run(stop_token);
                 transition(worker, TunnelState::Stopped,
@@ -104,7 +105,7 @@ void ManagedTunnelRuntime::startProducerWorker(std::string alias, DatagramProduc
 
     const WorkerPtr worker = std::make_shared<Worker>();
     worker->key = key;
-    worker->snapshot = {alias, RuntimeKind::Producer, TunnelState::Starting, {}, "Starting"};
+    worker->snapshot = {alias, RuntimeKind::Producer, TunnelState::Starting, {}, {}, "Starting"};
     {
         const std::lock_guard<std::mutex> lock(mutex_);
         workers_.emplace(key, worker);
@@ -246,20 +247,23 @@ void ManagedTunnelRuntime::transition(const WorkerPtr& worker, TunnelState state
     publish(snapshot, state == TunnelState::Failed ? EventSeverity::Error : EventSeverity::Info);
 }
 
-void ManagedTunnelRuntime::recordDatagram(const WorkerPtr& worker, std::size_t bytes) {
+void ManagedTunnelRuntime::recordDatagram(const WorkerPtr& worker, const DatagramTunneler::DatagramObservation& observation) {
     const std::lock_guard<std::mutex> lock(mutex_);
     ++worker->snapshot.metrics.datagram_count;
-    worker->snapshot.metrics.byte_count += bytes;
+    worker->snapshot.metrics.byte_count += observation.bytes;
     const double elapsed_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - worker->started_at).count();
     if (elapsed_seconds > 0.0) {
         worker->snapshot.metrics.throughput_bytes_per_second =
             static_cast<double>(worker->snapshot.metrics.byte_count) / elapsed_seconds;
     }
-}
-
-void ManagedTunnelRuntime::recordLatency(const WorkerPtr& worker, double milliseconds) {
-    const std::lock_guard<std::mutex> lock(mutex_);
-    worker->latency_samples.push_back(milliseconds);
+    worker->snapshot.recent_datagrams.push_back({std::chrono::system_clock::now(), observation.bytes, observation.latency_milliseconds});
+    if (worker->snapshot.recent_datagrams.size() > 10U) {
+        worker->snapshot.recent_datagrams.erase(worker->snapshot.recent_datagrams.begin());
+    }
+    if (!observation.latency_milliseconds.has_value()) {
+        return;
+    }
+    worker->latency_samples.push_back(*observation.latency_milliseconds);
     if (worker->latency_samples.size() > 1024U) {
         worker->latency_samples.pop_front();
     }

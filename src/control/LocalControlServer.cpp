@@ -282,7 +282,19 @@ std::string snapshotJson(const TunnelSnapshot& snapshot) {
     optionalNumber(snapshot.metrics.p99_latency_milliseconds);
     output << ",\"maximum_latency_milliseconds\":";
     optionalNumber(snapshot.metrics.maximum_latency_milliseconds);
-    output << "}}";
+    output << "},\"recent_datagrams\":[";
+    for (std::size_t index = 0; index < snapshot.recent_datagrams.size(); ++index) {
+        if (index != 0U) {
+            output << ',';
+        }
+        const DatagramDetail& datagram = snapshot.recent_datagrams[index];
+        const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(datagram.timestamp.time_since_epoch()).count();
+        output << "{\"timestamp_unix_milliseconds\":" << timestamp << ",\"bytes\":" << datagram.bytes
+               << ",\"latency_milliseconds\":";
+        optionalNumber(datagram.latency_milliseconds);
+        output << '}';
+    }
+    output << "]}";
     return output.str();
 }
 

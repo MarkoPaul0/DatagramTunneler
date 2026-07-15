@@ -43,8 +43,7 @@ private:
     void requestStop(RuntimeKind kind, std::string_view alias);
     void joinAndRemove(RuntimeKind kind, std::string_view alias);
     void transition(const WorkerPtr& worker, TunnelState state, std::string detail);
-    void recordDatagram(const WorkerPtr& worker, std::size_t bytes);
-    void recordLatency(const WorkerPtr& worker, double milliseconds);
+    void recordDatagram(const WorkerPtr& worker, const DatagramTunneler::DatagramObservation& observation);
     void publish(const TunnelSnapshot& snapshot, EventSeverity severity) const;
 
     const ControlService& control_service_;

@@ -72,6 +72,10 @@ Omit `count` to produce until stopped. `interval_milliseconds` must be positive.
 
 Metrics that are not available, including latency for a producer or unsynchronised peer clocks, are `null`.
 
+Each tunnel runtime also exposes `recent_datagrams`: the most recent ten
+observations, each containing a timestamp, byte length, and latency when the
+server can calculate it. Datagram payloads are never retained or returned.
+
 ## WebSocket events
 
 `GET /api/v1/events` upgrades to a WebSocket. The server emits event messages only; the client does not issue lifecycle commands over the socket.

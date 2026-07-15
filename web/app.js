@@ -120,6 +120,15 @@
     $('#detail-events').innerHTML = events.length
       ? events.map((event) => `<li><time>${new Date(event.timestamp_unix_milliseconds || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><span>${escapeHtml(event.message || 'updated')}</span></li>`).join('')
       : '<li class="detail-empty">No control events recorded for this tunnel in this browser session.</li>';
+    const datagrams = [...(runtime.recent_datagrams || [])].reverse();
+    const action = tunnel.mode === 'client' ? 'Forwarded' : 'Published';
+    $('#detail-datagrams').innerHTML = datagrams.length
+      ? datagrams.map((datagram) => {
+          const timestamp = new Date(datagram.timestamp_unix_milliseconds || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const latency = datagram.latency_milliseconds == null ? 'Latency unavailable' : `${Number(datagram.latency_milliseconds).toFixed(3)} ms`;
+          return `<li><time>${timestamp}</time><span><b>${action}</b> ${escapeHtml(formatBytes(datagram.bytes))}<small>${escapeHtml(latency)}</small></span></li>`;
+        }).join('')
+      : '<li class="detail-empty">No datagrams observed for this tunnel yet.</li>';
   }
 
   function selectTunnel(alias) {

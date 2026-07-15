@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "DatagramTunneler.h"
 
@@ -46,11 +47,20 @@ struct TunnelMetrics {
     std::optional<double> maximum_latency_milliseconds;
 };
 
+// Payloads are intentionally not retained. This keeps the local UI useful for
+// diagnosis without exposing application data or accumulating unbounded state.
+struct DatagramDetail {
+    std::chrono::system_clock::time_point timestamp = std::chrono::system_clock::now();
+    std::uint64_t bytes = 0;
+    std::optional<double> latency_milliseconds;
+};
+
 struct TunnelSnapshot {
     std::string alias;
     RuntimeKind kind = RuntimeKind::Tunnel;
     TunnelState state = TunnelState::Stopped;
     TunnelMetrics metrics;
+    std::vector<DatagramDetail> recent_datagrams;
     std::string detail;
 };
 
