@@ -20,6 +20,8 @@ namespace {
 constexpr int kNoFlags = 0;
 constexpr int kHeartbeatPeriodSeconds = 5;
 constexpr auto kLatencyReportInterval = std::chrono::seconds(5);
+constexpr auto kTcpConnectTimeout = std::chrono::seconds(10);
+constexpr auto kTcpConnectPollInterval = std::chrono::milliseconds(250);
 
 uint64_t currentTimestampMicroseconds() {
     const auto elapsed = std::chrono::system_clock::now().time_since_epoch();
@@ -191,8 +193,11 @@ void DatagramTunneler::runClient(std::stop_token stop_token) {
     server_addr.sin_addr.s_addr = inet_addr(cfg_.tcp_srv_ip_.c_str());
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(cfg_.tcp_srv_port_);
-    if (connect(tcp_socket_.get(), reinterpret_cast<struct sockaddr *>(&server_addr), sizeof(server_addr)) < 0) {
-        throwTunnelError("Unable to connect to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, lastSocketError());
+    if (!connectClientWithTimeout(server_addr, stop_token)) {
+        return;
+    }
+    if (observer_.on_client_connection_state) {
+        observer_.on_client_connection_state(ClientConnectionState::Connected);
     }
     if (compactOutputEnabled()) {
         logCompactMessage(LogLevel::Info, "connected to TCP server");
@@ -267,8 +272,78 @@ void DatagramTunneler::runClient(std::stop_token stop_token) {
         }
     }
 }
-//------------------------------------------------------------------------------------------------
 
+bool DatagramTunneler::connectClientWithTimeout(const sockaddr_in& server_addr, std::stop_token stop_token) {
+    int nonblocking_error = 0;
+    if (!setSocketBlocking(tcp_socket_.get(), false, &nonblocking_error)) {
+        throwTunnelError("Could not set TCP socket to non-blocking mode. Error %d", nonblocking_error);
+    }
+
+    const int connect_result = connect(tcp_socket_.get(), reinterpret_cast<const sockaddr*>(&server_addr), sizeof(server_addr));
+    if (connect_result == 0) {
+        if (!setSocketBlocking(tcp_socket_.get(), true, &nonblocking_error)) {
+            throwTunnelError("Could not restore TCP socket blocking mode. Error %d", nonblocking_error);
+        }
+        return true;
+    }
+
+    const int connect_error = lastSocketError();
+    if (!isConnectInProgress(connect_error)) {
+        throwTunnelError("Unable to connect to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, connect_error);
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + kTcpConnectTimeout;
+    while (!stop_token.stop_requested() && std::chrono::steady_clock::now() < deadline) {
+        fd_set writable;
+        fd_set failed;
+        FD_ZERO(&writable);
+        FD_ZERO(&failed);
+        FD_SET(tcp_socket_.get(), &writable);
+        FD_SET(tcp_socket_.get(), &failed);
+        const auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(deadline - std::chrono::steady_clock::now());
+        const auto wait = std::min(remaining, std::chrono::duration_cast<std::chrono::microseconds>(kTcpConnectPollInterval));
+        timeval timeout {};
+        timeout.tv_sec = static_cast<decltype(timeout.tv_sec)>(wait.count() / 1000000);
+        timeout.tv_usec = static_cast<decltype(timeout.tv_usec)>(wait.count() % 1000000);
+#ifdef _WIN32
+        const int selected = select(0, nullptr, &writable, &failed, &timeout);
+#else
+        const int selected = select(tcp_socket_.get() + 1, nullptr, &writable, &failed, &timeout);
+#endif
+        if (selected == 0) {
+            continue;
+        }
+        if (selected < 0) {
+            throwTunnelError("Unable to wait for TCP connection to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(),
+                             cfg_.tcp_srv_port_, lastSocketError());
+        }
+
+        int socket_error = 0;
+        SocketAddressLength socket_error_length = sizeof(socket_error);
+#ifdef _WIN32
+        if (getsockopt(tcp_socket_.get(), SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&socket_error),
+                       &socket_error_length) < 0) {
+#else
+        if (getsockopt(tcp_socket_.get(), SOL_SOCKET, SO_ERROR, &socket_error, &socket_error_length) < 0) {
+#endif
+            throwTunnelError("Unable to inspect TCP connection to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(),
+                             cfg_.tcp_srv_port_, lastSocketError());
+        }
+        if (socket_error != 0) {
+            throwTunnelError("Unable to connect to server %s:%u. Error %d!", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_, socket_error);
+        }
+        if (!setSocketBlocking(tcp_socket_.get(), true, &nonblocking_error)) {
+            throwTunnelError("Could not restore TCP socket blocking mode. Error %d", nonblocking_error);
+        }
+        return true;
+    }
+
+    if (stop_token.stop_requested()) {
+        return false;
+    }
+    throwTunnelError("Timed out connecting to server %s:%u after %lld seconds.", cfg_.tcp_srv_ip_.c_str(), cfg_.tcp_srv_port_,
+                     static_cast<long long>(kTcpConnectTimeout.count()));
+}
 
 //------------------------------------------------------------------------------------------------
 // SERVER SIDE METHODS

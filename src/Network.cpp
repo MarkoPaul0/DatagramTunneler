@@ -30,6 +30,7 @@ std::string utf8FromWide(const wchar_t* value) {
 
 #else
 
+#include <fcntl.h>
 #include <ifaddrs.h>
 
 #endif
@@ -53,6 +54,32 @@ bool initializeNetwork(int* error_code) {
     (void)error_code;
 #endif
     return true;
+}
+
+bool isConnectInProgress(int error_code) {
+#ifdef _WIN32
+    return error_code == WSAEINPROGRESS || error_code == WSAEWOULDBLOCK || error_code == WSAEALREADY;
+#else
+    return error_code == EINPROGRESS || error_code == EWOULDBLOCK || error_code == EALREADY;
+#endif
+}
+
+bool setSocketBlocking(SocketHandle socket, bool blocking, int* error_code) {
+#ifdef _WIN32
+    u_long mode = blocking ? 0UL : 1UL;
+    if (ioctlsocket(socket, FIONBIO, &mode) == 0) {
+        return true;
+    }
+#else
+    const int flags = fcntl(socket, F_GETFL, 0);
+    if (flags >= 0 && fcntl(socket, F_SETFL, blocking ? flags & ~O_NONBLOCK : flags | O_NONBLOCK) == 0) {
+        return true;
+    }
+#endif
+    if (error_code != nullptr) {
+        *error_code = lastSocketError();
+    }
+    return false;
 }
 
 std::optional<std::string> resolveInterfaceIpv4(std::string_view interface_reference) {

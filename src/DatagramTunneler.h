@@ -11,6 +11,10 @@
 
 class DatagramTunneler {
 public:
+    enum class ClientConnectionState {
+        Connected,
+    };
+
     struct DatagramObservation {
         std::size_t bytes = 0;
         std::optional<double> latency_milliseconds;
@@ -18,6 +22,7 @@ public:
 
     struct RuntimeObserver {
         std::function<void(const DatagramObservation&)> on_datagram;
+        std::function<void(ClientConnectionState)> on_client_connection_state;
     };
 
     struct Config {
@@ -56,6 +61,7 @@ private:
     // Server side methods
     void setupServer(const Config& cfg);
     void runServer(std::stop_token stop_token);
+    bool connectClientWithTimeout(const sockaddr_in& server_addr, std::stop_token stop_token);
 
     // Member variables
     Config          cfg_;

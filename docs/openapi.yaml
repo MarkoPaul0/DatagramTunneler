@@ -304,7 +304,7 @@ components:
           enum: [tunnel, producer]
         state:
           type: string
-          enum: [stopped, starting, running, stopping, failed]
+          enum: [stopped, starting, connecting, connected, running, stopping, failed]
         detail:
           type: string
         metrics:

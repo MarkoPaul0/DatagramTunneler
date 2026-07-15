@@ -233,6 +233,8 @@ const char* stateName(TunnelState state) {
     switch (state) {
     case TunnelState::Stopped: return "stopped";
     case TunnelState::Starting: return "starting";
+    case TunnelState::Connecting: return "connecting";
+    case TunnelState::Connected: return "connected";
     case TunnelState::Running: return "running";
     case TunnelState::Stopping: return "stopping";
     case TunnelState::Failed: return "failed";
@@ -649,7 +651,8 @@ void LocalControlServer::broadcastMetricSnapshots() {
         }
     }
     for (const TunnelSnapshot& snapshot : runtime_.snapshots()) {
-        if (snapshot.state != TunnelState::Starting && snapshot.state != TunnelState::Running &&
+        if (snapshot.state != TunnelState::Starting && snapshot.state != TunnelState::Connecting &&
+            snapshot.state != TunnelState::Connected && snapshot.state != TunnelState::Running &&
             snapshot.state != TunnelState::Stopping) {
             continue;
         }

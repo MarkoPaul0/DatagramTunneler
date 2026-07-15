@@ -136,6 +136,9 @@ inline bool isDatagramTooLargeError(int error_code) {
 #endif
 }
 
+bool isConnectInProgress(int error_code);
+bool setSocketBlocking(SocketHandle socket, bool blocking, int* error_code);
+
 template <typename T>
 int setSocketOption(SocketHandle socket, int level, int option, const T& value) {
 #ifdef _WIN32

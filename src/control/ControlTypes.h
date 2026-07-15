@@ -15,6 +15,8 @@ namespace control {
 enum class TunnelState {
     Stopped,
     Starting,
+    Connecting,
+    Connected,
     Running,
     Stopping,
     Failed,

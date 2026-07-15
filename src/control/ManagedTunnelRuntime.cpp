@@ -58,7 +58,11 @@ void ManagedTunnelRuntime::startTunnel(std::string alias) {
 
     const WorkerPtr worker = std::make_shared<Worker>();
     worker->key = key;
-    worker->snapshot = {alias, RuntimeKind::Tunnel, TunnelState::Starting, {}, {}, "Starting"};
+    const TunnelState initial_state = definition.config.is_client_ ? TunnelState::Connecting : TunnelState::Starting;
+    const std::string initial_detail = definition.config.is_client_
+        ? "Connecting to " + definition.config.tcp_srv_ip_ + ":" + std::to_string(definition.config.tcp_srv_port_)
+        : "Starting";
+    worker->snapshot = {alias, RuntimeKind::Tunnel, initial_state, {}, {}, initial_detail};
     {
         const std::lock_guard<std::mutex> lock(mutex_);
         workers_.emplace(key, worker);
@@ -68,11 +72,19 @@ void ManagedTunnelRuntime::startTunnel(std::string alias) {
     try {
         worker->thread = std::jthread([this, worker, config = definition.config](std::stop_token stop_token) {
             worker->started_at = std::chrono::steady_clock::now();
-            transition(worker, TunnelState::Running, "Running");
+            if (!config.is_client_) {
+                transition(worker, TunnelState::Running, "Running");
+            }
             try {
                 DatagramTunneler::RuntimeObserver observer;
                 observer.on_datagram = [this, worker](const DatagramTunneler::DatagramObservation& observation) {
                     recordDatagram(worker, observation);
+                };
+                observer.on_client_connection_state = [this, worker, config](DatagramTunneler::ClientConnectionState state) {
+                    if (state == DatagramTunneler::ClientConnectionState::Connected) {
+                        transition(worker, TunnelState::Connected,
+                                   "Connected to " + config.tcp_srv_ip_ + ":" + std::to_string(config.tcp_srv_port_));
+                    }
                 };
                 DatagramTunneler tunneler(config, std::move(observer));
                 tunneler.run(stop_token);
@@ -144,7 +156,8 @@ void ManagedTunnelRuntime::releaseFinishedSlot(RuntimeKind kind, std::string_vie
             return;
         }
         worker = iterator->second;
-        if (worker->snapshot.state == TunnelState::Starting || worker->snapshot.state == TunnelState::Running ||
+        if (worker->snapshot.state == TunnelState::Starting || worker->snapshot.state == TunnelState::Connecting ||
+            worker->snapshot.state == TunnelState::Connected || worker->snapshot.state == TunnelState::Running ||
             worker->snapshot.state == TunnelState::Stopping) {
             throw std::runtime_error("runtime '" + std::string(alias) + "' is already active");
         }
