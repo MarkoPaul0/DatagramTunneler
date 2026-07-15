@@ -440,7 +440,7 @@ int runControlCommand(int argc, char* argv[]) {
     control::LocalControlServerOptions options;
     options.port = command.port;
     control::LocalControlServer server(command.config_path, options);
-    INFO("Local control service listening at http://127.0.0.1:%u/api/v1", static_cast<unsigned int>(options.port));
+    INFO("Local control dashboard listening at http://127.0.0.1:%u", static_cast<unsigned int>(options.port));
     server.run();
     return 0;
 }
