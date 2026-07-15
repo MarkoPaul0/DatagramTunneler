@@ -59,7 +59,9 @@
     state.events = state.events.slice(0, 40);
     eventList.innerHTML = state.events.map((item) => {
       const time = new Date(item.timestamp_unix_milliseconds || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      return `<li class="${escapeHtml(item.severity || 'info')}"><time>${time}</time><p><b>${escapeHtml(item.alias || 'service')}</b> ${escapeHtml(item.message || 'updated')}</p></li>`;
+      const kind = item.snapshot?.kind || 'service';
+      const label = kind === 'producer' ? 'Producer' : kind === 'tunnel' ? 'Tunnel' : 'Service';
+      return `<li class="${escapeHtml(item.severity || 'info')}"><time>${time}</time><p><span class="event-kind ${escapeHtml(kind)}">${label}</span><b>${escapeHtml(item.alias || 'service')}</b> ${escapeHtml(item.message || 'updated')}</p></li>`;
     }).join('');
   }
 
