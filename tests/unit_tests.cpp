@@ -1,9 +1,12 @@
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 #include "CommandLine.h"
@@ -11,6 +14,7 @@
 #include "Network.h"
 #include "Protocol.h"
 #include "control/ControlService.h"
+#include "control/ManagedTunnelRuntime.h"
 
 namespace {
 
@@ -164,6 +168,46 @@ bool testControlServiceCatalog() {
                   "control service must expose a direct command equivalent");
 }
 
+class RecordingEventSink final : public control::EventSink {
+public:
+    void publish(const control::ControlEvent& event) override {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        events_.push_back(event);
+    }
+
+    std::size_t size() const {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        return events_.size();
+    }
+
+private:
+    mutable std::mutex mutex_;
+    std::vector<control::ControlEvent> events_;
+};
+
+bool testManagedProducerRuntime() {
+    const std::filesystem::path configuration_path =
+        std::filesystem::path(__FILE__).parent_path() / "named_tunnels.toml";
+    const control::ControlService service(configuration_path);
+    RecordingEventSink event_sink;
+    control::ManagedTunnelRuntime runtime(service, &event_sink);
+    DatagramProducer::Options options;
+    options.count = 1;
+    options.interval_ms = 1;
+    runtime.startProducer("example-client", options);
+
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        const std::vector<control::TunnelSnapshot> snapshots = runtime.snapshots();
+        if (snapshots.size() == 1 && snapshots.front().state == control::TunnelState::Stopped) {
+            return expect(snapshots.front().kind == control::RuntimeKind::Producer,
+                          "managed producer must be identified as a producer") &&
+                   expect(event_sink.size() >= 3, "managed producer must publish lifecycle events");
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return expect(false, "managed producer must reach a stopped state");
+}
+
 } // namespace
 
 
@@ -174,7 +218,7 @@ int main() {
         return 1;
     }
     return testProtocolFraming() && testClientCommandLineParsing() && testCompactCommandLineParsing() && testNamedTunnelConfiguration() &&
-                   testInvalidNamedTunnelConfiguration() && testControlServiceCatalog()
+                   testInvalidNamedTunnelConfiguration() && testControlServiceCatalog() && testManagedProducerRuntime()
                ? 0
                : 1;
 }

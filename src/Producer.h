@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <stop_token>
 #include <string>
 
 #include "DatagramTunneler.h"
@@ -15,7 +16,7 @@ public:
 
     DatagramProducer(const DatagramTunneler::Config& config, Options options);
 
-    void run();
+    void run(std::stop_token stop_token = {});
 
 private:
     DatagramTunneler::Config config_;

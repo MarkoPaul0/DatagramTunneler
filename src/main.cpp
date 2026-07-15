@@ -450,8 +450,13 @@ int main(int argc, char* argv[]) {
 
     // Create and run the datagram tunneler with the parsed config
     configureCompactOutput(cfg.compact_output_, compactTunnelContext(cfg));
-    DatagramTunneler tunneler(std::move(cfg));
-    tunneler.run();
+    try {
+        DatagramTunneler tunneler(std::move(cfg));
+        tunneler.run();
+    } catch (const std::exception& error) {
+        ERROR("%s", error.what());
+        return 1;
+    }
 
     INFO("Exiting program");
     return 0;

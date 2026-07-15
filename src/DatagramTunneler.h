@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <stop_token>
 #include <string>
 
 #include "Network.h"
@@ -33,15 +34,15 @@ public:
     explicit DatagramTunneler(Config cfg);
 
     // Run method, to be called after instantiation
-    void run();
+    void run(std::stop_token stop_token = {});
 
 private:
     // Client side methods
     void setupClient(const Config& cfg);
-    void runClient();
+    void runClient(std::stop_token stop_token);
     // Server side methods
     void setupServer(const Config& cfg);
-    void runServer();
+    void runServer(std::stop_token stop_token);
 
     // Member variables
     Config          cfg_;

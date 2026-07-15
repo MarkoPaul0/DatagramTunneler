@@ -8,8 +8,8 @@
 
 namespace control {
 
-// Task 29 will provide the supervisor implementation. Adapters depend only on
-// this lifecycle contract, not on a particular process or threading model.
+// Adapters depend only on this lifecycle contract, not on a particular process
+// or threading model.
 class TunnelRuntime {
 public:
     virtual ~TunnelRuntime() = default;

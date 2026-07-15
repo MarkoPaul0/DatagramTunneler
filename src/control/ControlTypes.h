@@ -19,6 +19,11 @@ enum class TunnelState {
     Failed,
 };
 
+enum class RuntimeKind {
+    Tunnel,
+    Producer,
+};
+
 enum class EventKind {
     Lifecycle,
     Log,
@@ -43,6 +48,7 @@ struct TunnelMetrics {
 
 struct TunnelSnapshot {
     std::string alias;
+    RuntimeKind kind = RuntimeKind::Tunnel;
     TunnelState state = TunnelState::Stopped;
     TunnelMetrics metrics;
     std::string detail;
