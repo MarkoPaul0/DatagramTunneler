@@ -20,6 +20,9 @@ open http://127.0.0.1:8765
 - A guided editor for adding, editing, and deleting client and server tunnels,
   alongside a direct TOML editor for file-oriented changes.
 
+The `udp_interface` field accepts either a local IPv4 address or an interface
+name, such as `en0`, `eth0`, or `Ethernet`.
+
 Datagram observations contain a timestamp, byte count, and latency when a
 server can calculate it. Payload contents are never stored or displayed.
 

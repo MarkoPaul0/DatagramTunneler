@@ -281,7 +281,7 @@
       <div class="editor-fields editor-fields-top">
         <label>Alias<input data-config-field="alias" value="${escapeAttribute(tunnel.alias)}" required></label>
         <label>Mode<select data-config-field="mode"><option value="client"${tunnel.mode === 'client' ? ' selected' : ''}>Client / ingress</option><option value="server"${tunnel.mode === 'server' ? ' selected' : ''}>Server / egress</option></select></label>
-        <label>UDP interface<input data-config-field="udp_interface" value="${escapeAttribute(tunnel.udp_interface)}" placeholder="192.168.1.20" required></label>
+        <label>UDP interface<input data-config-field="udp_interface" value="${escapeAttribute(tunnel.udp_interface)}" placeholder="192.168.1.20 or en0" required></label>
       </div>
       <div class="editor-fields">${modeFields}</div>
     </article>`;

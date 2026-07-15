@@ -58,7 +58,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
 endif()
 
 if(WIN32)
-    target_link_libraries(dgramtunneler PRIVATE ws2_32)
+    target_link_libraries(dgramtunneler PRIVATE ws2_32 iphlpapi)
 endif()
 
 install(TARGETS dgramtunneler
@@ -117,7 +117,7 @@ if(BUILD_TESTING)
     endif()
 
     if(WIN32)
-        target_link_libraries(dgramtunneler_unit_tests PRIVATE ws2_32)
+        target_link_libraries(dgramtunneler_unit_tests PRIVATE ws2_32 iphlpapi)
     endif()
 
     add_test(NAME unit_tests COMMAND dgramtunneler_unit_tests)

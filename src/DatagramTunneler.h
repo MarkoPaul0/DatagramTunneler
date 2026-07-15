@@ -23,6 +23,7 @@ public:
     struct Config {
         bool            is_client_ = false;
         std::string     udp_iface_ip_;
+        std::string     udp_iface_reference_;
         std::string     tcp_iface_ip_;
         uint16_t        tcp_srv_port_ = 0;
         std::string     udp_dst_ip_;    // Client uses this to join. Server uses this to publish if use_clt_grp_ is false

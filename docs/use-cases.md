@@ -18,7 +18,7 @@ Use a trusted private network or secure overlay such as WireGuard or SSH.
 | Destination group | `239.1.2.4:5000` | Receives the republished datagrams |
 
 The server host must be reachable from the client host on TCP port `14052`.
-The `-i` option is the local interface address on each host—not the multicast
+The `-i` option is the local interface address or name on each host—not the multicast
 address.
 
 ## 1. Relay multicast between two networks

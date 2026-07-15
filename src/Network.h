@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 
 #ifdef _WIN32
@@ -52,6 +55,10 @@ constexpr int kNoSignalFlag = 0;
 #endif
 
 bool initializeNetwork(int* error_code);
+
+// Accept either an IPv4 address or the name of a local network interface and
+// return the IPv4 address needed by IPv4 multicast socket options.
+std::optional<std::string> resolveInterfaceIpv4(std::string_view interface_reference);
 
 inline void closeSocket(SocketHandle socket) {
     if (socket == kInvalidSocket) {

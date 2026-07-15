@@ -64,6 +64,7 @@ bool parseCommandLineConfig(int argc, char* argv[], DatagramTunneler::Config* co
             if (option == "--udpiface" || option == "-i") {
                 INFO("UDP interface:               %s", argument);
                 cfg->udp_iface_ip_ = argument;
+                cfg->udp_iface_reference_ = argument;
             } else if (option == "--tcpiface" || option == "-j") {
                 INFO("TCP interface:               %s", argument);
                 cfg->tcp_iface_ip_ = argument;

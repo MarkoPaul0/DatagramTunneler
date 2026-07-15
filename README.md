@@ -149,6 +149,10 @@ Named definitions are stored in a versioned TOML configuration file. The default
 
 Use `--config <path>` with any configuration or tunnel command to select another file.
 
+`udp_interface` accepts either a local IPv4 address (for example,
+`192.168.1.20`) or a local interface name such as `en0`, `eth0`, or `Ethernet`.
+The name must resolve to an IPv4 address on the host running that tunnel.
+
 ```toml
 version = 1
 
@@ -238,8 +242,8 @@ client host on the same subnet from receiving and re-forwarding the packet.
 Start the server before the client.
 
 ```sh
-dgramtunneler --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>]
-dgramtunneler --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port>
+dgramtunneler --server -i <udp_interface> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>]
+dgramtunneler --client -i <udp_interface> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port>
 ```
 
 The server's `-u` destination is optional: when absent, it republishes each datagram to the multicast group encoded by the client.

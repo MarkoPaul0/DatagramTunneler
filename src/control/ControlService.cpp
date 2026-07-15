@@ -27,12 +27,12 @@ std::string udpDestination(const NamedTunnel& tunnel) {
 std::string directCommand(const NamedTunnel& tunnel) {
     const DatagramTunneler::Config& config = tunnel.config;
     if (config.is_client_) {
-        return "dgramtunneler --client -i " + config.udp_iface_ip_ + " -t " +
+        return "dgramtunneler --client -i " + (config.udp_iface_reference_.empty() ? config.udp_iface_ip_ : config.udp_iface_reference_) + " -t " +
                endpoint(config.tcp_srv_ip_, config.tcp_srv_port_) + " -u " +
                endpoint(config.udp_dst_ip_, config.udp_dst_port_);
     }
 
-    std::string command = "dgramtunneler --server -i " + config.udp_iface_ip_ +
+    std::string command = "dgramtunneler --server -i " + (config.udp_iface_reference_.empty() ? config.udp_iface_ip_ : config.udp_iface_reference_) +
                           " -t " + std::to_string(config.tcp_srv_port_);
     if (!config.use_clt_grp_) {
         command += " -u " + endpoint(config.udp_dst_ip_, config.udp_dst_port_);

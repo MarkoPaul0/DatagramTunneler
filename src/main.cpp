@@ -44,9 +44,9 @@ static void printUsage(const char* binary_name) {
     printf("    %s control serve [--config <path>] [--port <port>]\n", binary_name);
     printf("\nDirect invocation:\n");
     printf("Server mode:\n");
-    printf("    %s --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>] [--compact]\n", binary_name);
+    printf("    %s --server -i <udp_interface> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>] [--compact]\n", binary_name);
     printf("Client mode:\n");
-    printf("    %s --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port> [--compact]\n", binary_name);
+    printf("    %s --client -i <udp_interface> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port> [--compact]\n", binary_name);
 }
 
 
@@ -326,7 +326,8 @@ void printTunnelList(const std::vector<control::TunnelSummary>& rows) {
 
 void printTunnel(const NamedTunnel& tunnel) {
     printf("%s (%s)\n", tunnel.alias.c_str(), modeName(tunnel));
-    printf("  udp_interface = %s\n", tunnel.config.udp_iface_ip_.c_str());
+    printf("  udp_interface = %s\n", (tunnel.config.udp_iface_reference_.empty()
+        ? tunnel.config.udp_iface_ip_ : tunnel.config.udp_iface_reference_).c_str());
     if (tunnel.config.is_client_) {
         printf("  udp_group = %s:%u\n", tunnel.config.udp_dst_ip_.c_str(), static_cast<unsigned int>(tunnel.config.udp_dst_port_));
         printf("  tcp_server = %s:%u\n", tunnel.config.tcp_srv_ip_.c_str(), static_cast<unsigned int>(tunnel.config.tcp_srv_port_));

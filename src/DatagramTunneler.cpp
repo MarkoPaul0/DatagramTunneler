@@ -124,6 +124,14 @@ bool DatagramTunneler::Config::isComplete() const {
 // ---------------------------- DatagramTunneler Implementation--------------------------------
 DatagramTunneler::DatagramTunneler(Config cfg, RuntimeObserver observer)
     : cfg_(std::move(cfg)), observer_(std::move(observer)) {
+    if (cfg_.udp_iface_reference_.empty()) {
+        cfg_.udp_iface_reference_ = cfg_.udp_iface_ip_;
+    }
+    const auto interface_address = resolveInterfaceIpv4(cfg_.udp_iface_ip_);
+    if (!interface_address.has_value()) {
+        throw std::runtime_error("could not resolve UDP interface '" + cfg_.udp_iface_reference_ + "' to an IPv4 address");
+    }
+    cfg_.udp_iface_ip_ = *interface_address;
     if (cfg_.is_client_)
         setupClient(cfg_);
     else
