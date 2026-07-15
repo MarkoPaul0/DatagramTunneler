@@ -61,6 +61,12 @@
 
   function metric(value, suffix = '') { return value == null ? 'Unavailable' : `${Number(value).toFixed(2)}${suffix}`; }
 
+  function formatTimestamp(milliseconds) {
+    return new Date(milliseconds || Date.now()).toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3
+    });
+  }
+
   function renderTunnels() {
     if (!state.tunnels.length) {
       tunnelGrid.innerHTML = '<div class="empty-state">No named tunnels are configured.</div>';
@@ -97,7 +103,7 @@
     state.events.unshift(event);
     state.events = state.events.slice(0, 40);
     eventList.innerHTML = state.events.map((item) => {
-      const time = new Date(item.timestamp_unix_milliseconds || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const time = formatTimestamp(item.timestamp_unix_milliseconds);
       const kind = item.snapshot?.kind || 'service';
       const definition = kind === 'tunnel' ? tunnelFor(item.alias) : null;
       const role = definition ? tunnelRole(definition.mode) : null;
@@ -131,13 +137,13 @@
     ].map(([label, value]) => `<div class="metric"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
     const events = state.events.filter((event) => event.alias === tunnel.alias && event.snapshot?.kind === 'tunnel');
     $('#detail-events').innerHTML = events.length
-      ? events.map((event) => `<li><time>${new Date(event.timestamp_unix_milliseconds || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><span>${escapeHtml(event.message || 'updated')}</span></li>`).join('')
+      ? events.map((event) => `<li><time>${formatTimestamp(event.timestamp_unix_milliseconds)}</time><span>${escapeHtml(event.message || 'updated')}</span></li>`).join('')
       : '<li class="detail-empty">No control events recorded for this tunnel in this browser session.</li>';
     const datagrams = [...(runtime.recent_datagrams || [])].reverse();
     const action = tunnel.mode === 'client' ? 'Forwarded' : 'Published';
     $('#detail-datagrams').innerHTML = datagrams.length
       ? datagrams.map((datagram) => {
-          const timestamp = new Date(datagram.timestamp_unix_milliseconds || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const timestamp = formatTimestamp(datagram.timestamp_unix_milliseconds);
           const latency = datagram.latency_milliseconds == null ? 'Latency unavailable' : `${Number(datagram.latency_milliseconds).toFixed(3)} ms`;
           return `<li><time>${timestamp}</time><span><b>${action}</b> ${escapeHtml(formatBytes(datagram.bytes))}<small>${escapeHtml(latency)}</small></span></li>`;
         }).join('')
