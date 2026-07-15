@@ -262,11 +262,27 @@ const char* severityName(EventSeverity severity) {
 
 std::string snapshotJson(const TunnelSnapshot& snapshot) {
     std::ostringstream output;
+    const auto optionalNumber = [&output](const std::optional<double>& value) {
+        if (value.has_value()) {
+            output << *value;
+        } else {
+            output << "null";
+        }
+    };
     output << "{\"alias\":\"" << jsonEscape(snapshot.alias) << "\",\"kind\":\"" << kindName(snapshot.kind)
            << "\",\"state\":\"" << stateName(snapshot.state) << "\",\"detail\":\"" << jsonEscape(snapshot.detail)
            << "\",\"metrics\":{\"datagram_count\":" << snapshot.metrics.datagram_count
            << ",\"byte_count\":" << snapshot.metrics.byte_count
-           << ",\"throughput_bytes_per_second\":" << snapshot.metrics.throughput_bytes_per_second << "}}";
+           << ",\"throughput_bytes_per_second\":" << snapshot.metrics.throughput_bytes_per_second
+           << ",\"average_latency_milliseconds\":";
+    optionalNumber(snapshot.metrics.average_latency_milliseconds);
+    output << ",\"p50_latency_milliseconds\":";
+    optionalNumber(snapshot.metrics.p50_latency_milliseconds);
+    output << ",\"p99_latency_milliseconds\":";
+    optionalNumber(snapshot.metrics.p99_latency_milliseconds);
+    output << ",\"maximum_latency_milliseconds\":";
+    optionalNumber(snapshot.metrics.maximum_latency_milliseconds);
+    output << "}}";
     return output.str();
 }
 

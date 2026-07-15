@@ -1,11 +1,12 @@
 (() => {
   const api = '/api/v1';
-  const state = { tunnels: [], runtimes: new Map(), events: [], socket: null, retry: null };
+  const state = { tunnels: [], runtimes: new Map(), events: [], selectedAlias: null, socket: null, retry: null };
   const $ = (selector) => document.querySelector(selector);
   const tunnelGrid = $('#tunnel-grid');
   const eventList = $('#event-list');
   const toast = $('#toast');
   const connection = $('#connection-state');
+  const detailPanel = $('#tunnel-detail');
 
   function notify(message, error = false) {
     toast.textContent = message;
@@ -36,6 +37,17 @@
     return state.tunnels.find((tunnel) => tunnel.alias === alias);
   }
 
+  function formatBytes(value) {
+    if (!value) return '0 B';
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
+  }
+
+  function formatRate(value) { return value ? `${formatBytes(value)}/s` : '0 B/s'; }
+
+  function metric(value, suffix = '') { return value == null ? 'Unavailable' : `${Number(value).toFixed(2)}${suffix}`; }
+
   function renderTunnels() {
     if (!state.tunnels.length) {
       tunnelGrid.innerHTML = '<div class="empty-state">No named tunnels are configured.</div>';
@@ -44,11 +56,13 @@
     tunnelGrid.innerHTML = state.tunnels.map((tunnel) => {
       const runtime = runtimeFor(tunnel.alias);
       const role = tunnelRole(tunnel.mode);
-      return `<article class="tunnel-card ${escapeHtml(runtime.state)}">
+      const selected = state.selectedAlias === tunnel.alias ? 'selected' : '';
+      return `<article class="tunnel-card ${escapeHtml(runtime.state)} ${selected}" data-tunnel-card="${escapeAttribute(tunnel.alias)}" tabindex="0" aria-label="Inspect ${escapeHtml(tunnel.alias)}">
         <div class="tunnel-top"><span class="mode-pill ${role.className}">${role.name} <small>· ${role.detail}</small></span><span class="runtime-state ${escapeHtml(runtime.state)}">${escapeHtml(runtime.state)}</span></div>
         <h3>${escapeHtml(tunnel.alias)}</h3>
         <p class="destination">UDP DESTINATION<br><b>${escapeHtml(tunnel.udp_destination)}</b></p>
         <p class="destination">${escapeHtml(runtime.detail || 'Not started')}</p>
+        <button class="inspect-button" data-inspect="${escapeAttribute(tunnel.alias)}" type="button">View stats &amp; events <span>→</span></button>
         <div class="action-row" aria-label="${escapeHtml(tunnel.alias)} controls">
           <button data-tunnel="${escapeAttribute(tunnel.alias)}" data-action="start" type="button">Start</button>
           <button data-tunnel="${escapeAttribute(tunnel.alias)}" data-action="restart" type="button">Restart</button>
@@ -56,6 +70,7 @@
         </div>
       </article>`;
     }).join('');
+    renderTunnelDetail();
   }
 
   function renderProducerAliases() {
@@ -78,6 +93,39 @@
       const className = kind === 'producer' ? 'producer' : role?.className || 'service';
       return `<li class="${escapeHtml(item.severity || 'info')}"><time>${time}</time><p><span class="event-kind ${escapeHtml(className)}">${label}${detail ? `<small>${detail}</small>` : ''}</span><b>${escapeHtml(item.alias || 'service')}</b> ${escapeHtml(item.message || 'updated')}</p></li>`;
     }).join('');
+  }
+
+  function renderTunnelDetail() {
+    const tunnel = tunnelFor(state.selectedAlias);
+    if (!tunnel) {
+      detailPanel.hidden = true;
+      return;
+    }
+    const runtime = runtimeFor(tunnel.alias);
+    const role = tunnelRole(tunnel.mode);
+    const metrics = runtime.metrics || {};
+    const averageSize = metrics.datagram_count ? metrics.byte_count / metrics.datagram_count : null;
+    detailPanel.hidden = false;
+    $('#detail-heading').textContent = tunnel.alias;
+    $('#detail-summary').innerHTML = `<span class="mode-pill ${role.className}">${role.name} <small>· ${role.detail}</small></span><span class="runtime-state ${escapeHtml(runtime.state)}">${escapeHtml(runtime.state)}</span><span>${escapeHtml(tunnel.udp_destination)}</span>`;
+    $('#metrics-grid').innerHTML = [
+      ['Datagrams', metrics.datagram_count ?? 0],
+      ['Transferred', formatBytes(metrics.byte_count ?? 0)],
+      ['Average size', averageSize == null ? 'Unavailable' : `${averageSize.toFixed(1)} B`],
+      ['Throughput', formatRate(metrics.throughput_bytes_per_second ?? 0)],
+      ['Latency avg', metric(metrics.average_latency_milliseconds, ' ms')],
+      ['Latency p99', metric(metrics.p99_latency_milliseconds, ' ms')]
+    ].map(([label, value]) => `<div class="metric"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+    const events = state.events.filter((event) => event.alias === tunnel.alias && event.snapshot?.kind === 'tunnel');
+    $('#detail-events').innerHTML = events.length
+      ? events.map((event) => `<li><time>${new Date(event.timestamp_unix_milliseconds || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><span>${escapeHtml(event.message || 'updated')}</span></li>`).join('')
+      : '<li class="detail-empty">No control events recorded for this tunnel in this browser session.</li>';
+  }
+
+  function selectTunnel(alias) {
+    state.selectedAlias = alias;
+    renderTunnels();
+    detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function eventFromWire(message) {
@@ -118,7 +166,7 @@
       state.tunnels = tunnelResponse.tunnels || [];
       state.runtimes = new Map((runtimeResponse.runtimes || []).map((runtime) => [`${runtime.kind}:${runtime.alias}`, runtime]));
       $('#config-editor').value = configResponse.toml || '';
-      renderTunnels(); renderProducerAliases();
+      renderTunnels(); renderProducerAliases(); renderTunnelDetail();
     } catch (error) { notify(error.message, true); }
   }
 
@@ -134,9 +182,20 @@
   function escapeAttribute(value) { return escapeHtml(value); }
 
   tunnelGrid.addEventListener('click', (event) => {
+    const inspect = event.target.closest('button[data-inspect]');
+    if (inspect) { selectTunnel(inspect.dataset.inspect); return; }
     const button = event.target.closest('button[data-tunnel]');
-    if (button) action(button.dataset.tunnel, button.dataset.action);
+    if (button) { action(button.dataset.tunnel, button.dataset.action); return; }
+    const card = event.target.closest('[data-tunnel-card]');
+    if (card) selectTunnel(card.dataset.tunnelCard);
   });
+  tunnelGrid.addEventListener('keydown', (event) => {
+    if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('[data-tunnel-card]')) {
+      event.preventDefault();
+      selectTunnel(event.target.dataset.tunnelCard);
+    }
+  });
+  $('#close-detail').addEventListener('click', () => { state.selectedAlias = null; renderTunnels(); });
   $('#refresh-button').addEventListener('click', refresh);
   $('#clear-events').addEventListener('click', () => { state.events = []; eventList.innerHTML = '<li class="event-empty">Waiting for lifecycle events…</li>'; });
   $('#producer-form').addEventListener('submit', async (event) => {

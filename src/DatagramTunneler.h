@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <stop_token>
 #include <string>
 
@@ -8,6 +9,11 @@
 
 class DatagramTunneler {
 public:
+    struct RuntimeObserver {
+        std::function<void(std::size_t)> on_datagram;
+        std::function<void(double)> on_latency;
+    };
+
     struct Config {
         bool            is_client_ = false;
         std::string     udp_iface_ip_;
@@ -31,7 +37,7 @@ public:
     };
 
     // Constructor
-    explicit DatagramTunneler(Config cfg);
+    explicit DatagramTunneler(Config cfg, RuntimeObserver observer = {});
 
     // Run method, to be called after instantiation
     void run(std::stop_token stop_token = {});
@@ -46,6 +52,7 @@ private:
 
     // Member variables
     Config          cfg_;
+    RuntimeObserver observer_;
     Socket          udp_socket_;    // Used by the client to read udp data or by the server to publish data
     Socket          tcp_socket_;    // Used by the client to connect to server, by the server to listen for a client
 };

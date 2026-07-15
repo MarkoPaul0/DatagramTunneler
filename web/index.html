@@ -49,6 +49,22 @@
         <div class="empty-state">Loading configured tunnels…</div>
       </section>
 
+      <section class="tunnel-detail" id="tunnel-detail" hidden aria-labelledby="detail-heading">
+        <div class="detail-heading">
+          <div>
+            <p class="eyebrow">SELECTED TUNNEL / RUNTIME DETAIL</p>
+            <h2 id="detail-heading">Tunnel detail</h2>
+          </div>
+          <button class="text-button" id="close-detail" type="button">Close ×</button>
+        </div>
+        <div class="detail-summary" id="detail-summary"></div>
+        <div class="metrics-grid" id="metrics-grid" aria-label="Tunnel statistics"></div>
+        <div class="detail-log">
+          <p class="eyebrow">RECENT CONTROL EVENTS</p>
+          <ol id="detail-events" aria-live="polite"></ol>
+        </div>
+      </section>
+
       <section class="operations-grid">
         <article class="panel producer-panel" aria-labelledby="producer-heading">
           <div class="panel-heading">

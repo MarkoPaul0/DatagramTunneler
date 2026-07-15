@@ -1,6 +1,8 @@
 #include "control/ManagedTunnelRuntime.h"
 
 #include <algorithm>
+#include <chrono>
+#include <deque>
 #include <exception>
 #include <stdexcept>
 #include <thread>
@@ -14,6 +16,8 @@ struct ManagedTunnelRuntime::Worker {
     std::string key;
     TunnelSnapshot snapshot;
     std::jthread thread;
+    std::chrono::steady_clock::time_point started_at = std::chrono::steady_clock::now();
+    std::deque<double> latency_samples;
 };
 
 ManagedTunnelRuntime::ManagedTunnelRuntime(const ControlService& control_service, EventSink* event_sink)
@@ -63,9 +67,13 @@ void ManagedTunnelRuntime::startTunnel(std::string alias) {
 
     try {
         worker->thread = std::jthread([this, worker, config = definition.config](std::stop_token stop_token) {
+            worker->started_at = std::chrono::steady_clock::now();
             transition(worker, TunnelState::Running, "Running");
             try {
-                DatagramTunneler tunneler(config);
+                DatagramTunneler::RuntimeObserver observer;
+                observer.on_datagram = [this, worker](std::size_t bytes) { recordDatagram(worker, bytes); };
+                observer.on_latency = [this, worker](double milliseconds) { recordLatency(worker, milliseconds); };
+                DatagramTunneler tunneler(config, std::move(observer));
                 tunneler.run(stop_token);
                 transition(worker, TunnelState::Stopped,
                            stop_token.stop_requested() ? "Stopped by request" : "Tunnel finished");
@@ -236,6 +244,38 @@ void ManagedTunnelRuntime::transition(const WorkerPtr& worker, TunnelState state
         snapshot = worker->snapshot;
     }
     publish(snapshot, state == TunnelState::Failed ? EventSeverity::Error : EventSeverity::Info);
+}
+
+void ManagedTunnelRuntime::recordDatagram(const WorkerPtr& worker, std::size_t bytes) {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    ++worker->snapshot.metrics.datagram_count;
+    worker->snapshot.metrics.byte_count += bytes;
+    const double elapsed_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - worker->started_at).count();
+    if (elapsed_seconds > 0.0) {
+        worker->snapshot.metrics.throughput_bytes_per_second =
+            static_cast<double>(worker->snapshot.metrics.byte_count) / elapsed_seconds;
+    }
+}
+
+void ManagedTunnelRuntime::recordLatency(const WorkerPtr& worker, double milliseconds) {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    worker->latency_samples.push_back(milliseconds);
+    if (worker->latency_samples.size() > 1024U) {
+        worker->latency_samples.pop_front();
+    }
+    std::vector<double> samples(worker->latency_samples.begin(), worker->latency_samples.end());
+    std::sort(samples.begin(), samples.end());
+    double total = 0.0;
+    for (const double sample : samples) {
+        total += sample;
+    }
+    const auto percentile = [&samples](double value) {
+        return samples[static_cast<std::size_t>(value * static_cast<double>(samples.size() - 1U))];
+    };
+    worker->snapshot.metrics.average_latency_milliseconds = total / static_cast<double>(samples.size());
+    worker->snapshot.metrics.p50_latency_milliseconds = percentile(0.50);
+    worker->snapshot.metrics.p99_latency_milliseconds = percentile(0.99);
+    worker->snapshot.metrics.maximum_latency_milliseconds = samples.back();
 }
 
 void ManagedTunnelRuntime::publish(const TunnelSnapshot& snapshot, EventSeverity severity) const {

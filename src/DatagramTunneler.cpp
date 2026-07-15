@@ -122,7 +122,8 @@ bool DatagramTunneler::Config::isComplete() const {
 
 
 // ---------------------------- DatagramTunneler Implementation--------------------------------
-DatagramTunneler::DatagramTunneler(Config cfg) : cfg_(std::move(cfg)) {
+DatagramTunneler::DatagramTunneler(Config cfg, RuntimeObserver observer)
+    : cfg_(std::move(cfg)), observer_(std::move(observer)) {
     if (cfg_.is_client_)
         setupClient(cfg_);
     else
@@ -252,6 +253,9 @@ void DatagramTunneler::runClient(std::stop_token stop_token) {
         }
         if (tunnel_pkt.type_ == TunnelPacketType::Datagram) {
             recordDatagram(tunnel_pkt.datalen_);
+            if (observer_.on_datagram) {
+                observer_.on_datagram(tunnel_pkt.datalen_);
+            }
         }
     }
 }
@@ -413,6 +417,9 @@ void DatagramTunneler::runServer(std::stop_token stop_token) {
             throwTunnelError("Unable to publish multicast data, sendto() error %d!", lastSocketError());
         }
         recordDatagram(tunnel_pkt.datalen_);
+        if (observer_.on_datagram) {
+            observer_.on_datagram(tunnel_pkt.datalen_);
+        }
 
         const uint64_t server_timestamp_us = currentTimestampMicroseconds();
         double latency_ms = 0.0;
@@ -423,6 +430,9 @@ void DatagramTunneler::runServer(std::stop_token stop_token) {
             latency_ms = static_cast<double>(server_timestamp_us - tunnel_pkt.client_timestamp_us_) / 1000.0;
             latency_available = true;
             recordLatency(latency_ms);
+            if (observer_.on_latency) {
+                observer_.on_latency(latency_ms);
+            }
             latency_statistics.record(latency_ms);
             latency_statistics.reportIfDue();
         }
