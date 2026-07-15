@@ -1,12 +1,25 @@
 (() => {
   const api = '/api/v1';
-  const state = { tunnels: [], runtimes: new Map(), events: [], selectedAlias: null, socket: null, retry: null };
+  const state = { tunnels: [], runtimes: new Map(), events: [], selectedAlias: null, socket: null, retry: null, view: 'operations', configDirty: false };
   const $ = (selector) => document.querySelector(selector);
   const tunnelGrid = $('#tunnel-grid');
   const eventList = $('#event-list');
   const toast = $('#toast');
   const connection = $('#connection-state');
   const detailPanel = $('#tunnel-detail');
+
+  function setView(view, updateLocation = true) {
+    state.view = view === 'configuration' ? 'configuration' : 'operations';
+    $('#operations-view').hidden = state.view !== 'operations';
+    $('#configuration-view').hidden = state.view !== 'configuration';
+    document.querySelectorAll('.view-tab').forEach((tab) => {
+      const active = tab.dataset.view === state.view;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-selected', String(active));
+    });
+    if (state.view === 'configuration') loadConfiguration();
+    if (updateLocation) history.replaceState(null, '', state.view === 'configuration' ? '#configuration' : '#operations');
+  }
 
   function notify(message, error = false) {
     toast.textContent = message;
@@ -167,14 +180,21 @@
     socket.onerror = () => socket.close();
   }
 
+  async function loadConfiguration() {
+    if (state.configDirty) return;
+    try {
+      const response = await request('/config');
+      $('#config-editor').value = response.toml || '';
+    } catch (error) { notify(error.message, true); }
+  }
+
   async function refresh() {
     try {
-      const [tunnelResponse, runtimeResponse, configResponse] = await Promise.all([
-        request('/tunnels'), request('/runtimes'), request('/config')
+      const [tunnelResponse, runtimeResponse] = await Promise.all([
+        request('/tunnels'), request('/runtimes')
       ]);
       state.tunnels = tunnelResponse.tunnels || [];
       state.runtimes = new Map((runtimeResponse.runtimes || []).map((runtime) => [`${runtime.kind}:${runtime.alias}`, runtime]));
-      $('#config-editor').value = configResponse.toml || '';
       renderTunnels(); renderProducerAliases(); renderTunnelDetail();
     } catch (error) { notify(error.message, true); }
   }
@@ -205,6 +225,7 @@
     }
   });
   $('#close-detail').addEventListener('click', () => { state.selectedAlias = null; renderTunnels(); });
+  document.querySelectorAll('.view-tab').forEach((tab) => tab.addEventListener('click', () => setView(tab.dataset.view)));
   $('#refresh-button').addEventListener('click', refresh);
   $('#clear-events').addEventListener('click', () => { state.events = []; eventList.innerHTML = '<li class="event-empty">Waiting for lifecycle events…</li>'; });
   $('#producer-form').addEventListener('submit', async (event) => {
@@ -221,11 +242,13 @@
     catch (error) { notify(error.message, true); }
   });
   $('#save-config').addEventListener('click', async () => {
-    try { await request('/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toml: $('#config-editor').value }) }); notify('Configuration saved'); await refresh(); }
+    try { await request('/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toml: $('#config-editor').value }) }); state.configDirty = false; notify('Configuration saved'); await refresh(); }
     catch (error) { notify(error.message, true); }
   });
+  $('#config-editor').addEventListener('input', () => { state.configDirty = true; });
 
   refresh();
+  setView(location.hash === '#configuration' ? 'configuration' : 'operations', false);
   connectEvents();
   window.setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 2000);
 })();

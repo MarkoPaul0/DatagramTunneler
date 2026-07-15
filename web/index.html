@@ -15,12 +15,17 @@
         <span class="brand-mark"><i></i><i></i><i></i></span>
         <span>Datagram<span>Tunneler</span></span>
       </a>
+      <nav class="view-tabs" aria-label="Control dashboard sections" role="tablist">
+        <button class="view-tab active" id="operations-tab" type="button" role="tab" aria-selected="true" aria-controls="operations-view" data-view="operations">Operations</button>
+        <button class="view-tab" id="configuration-tab" type="button" role="tab" aria-selected="false" aria-controls="configuration-view" data-view="configuration">Configuration</button>
+      </nav>
       <div class="connection-state" id="connection-state" aria-live="polite">
         <span class="state-dot"></span><span>CONNECTING</span>
       </div>
     </header>
 
     <main id="main">
+      <div class="app-view" id="operations-view" role="tabpanel" aria-labelledby="operations-tab">
       <section class="hero">
         <div>
           <p class="eyebrow">DGRAMTUNNELER / LOCAL CONTROL / API V1</p>
@@ -114,11 +119,14 @@
           </ol>
         </article>
       </section>
+      </div>
 
-      <section class="section-head config-section-head" aria-labelledby="config-heading">
+      <section class="app-view configuration-view" id="configuration-view" role="tabpanel" aria-labelledby="configuration-tab" hidden>
+      <section class="configuration-hero">
         <div>
-          <p class="eyebrow">04 / SOURCE OF TRUTH</p>
+          <p class="eyebrow">CONFIGURATION / SOURCE OF TRUTH</p>
           <h2 id="config-heading">Configuration</h2>
+          <p>Review and update the active named-tunnel TOML file. Changes are validated before they are saved.</p>
         </div>
         <span class="config-note">Validated before save</span>
       </section>
@@ -129,6 +137,7 @@
           <p id="config-help">Changes update the active local configuration file. Running tunnels are not restarted automatically.</p>
           <button class="primary-button" id="save-config" type="button">Save configuration <span>→</span></button>
         </div>
+      </section>
       </section>
     </main>
 
