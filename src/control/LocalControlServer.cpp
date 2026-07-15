@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 
 #include "control/ControlApi.h"
@@ -455,7 +456,14 @@ void LocalControlServer::run() {
         throw std::runtime_error("could not listen for local control requests (error " + std::to_string(lastSocketError()) + ")");
     }
     listener_ = std::move(socket);
-    auto next_metrics_publish = std::chrono::steady_clock::now() + kMetricsPublishInterval;
+    std::jthread metrics_publisher([this](std::stop_token stop_token) {
+        while (!stop_token.stop_requested() && !stop_requested_) {
+            std::this_thread::sleep_for(kMetricsPublishInterval);
+            if (!stop_token.stop_requested() && !stop_requested_) {
+                broadcastMetricSnapshots();
+            }
+        }
+    });
     while (!stop_requested_) {
         sockaddr_in remote{};
         SocketAddressLength length = sizeof(remote);
@@ -466,11 +474,6 @@ void LocalControlServer::run() {
             static_cast<void>(setSocketOption(client.get(), SOL_SOCKET, SO_NOSIGPIPE, disable_sigpipe));
 #endif
             serveConnection(std::move(client));
-        }
-        const auto now = std::chrono::steady_clock::now();
-        if (now >= next_metrics_publish) {
-            broadcastMetricSnapshots();
-            next_metrics_publish = now + kMetricsPublishInterval;
         }
     }
 }
