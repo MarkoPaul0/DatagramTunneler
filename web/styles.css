@@ -38,8 +38,12 @@ h1, h2, p { margin-top: 0; } h1 { font-size: clamp(39px, 5vw, 63px); line-height
 .section-head { padding: 42px 0 21px; display: flex; align-items: end; justify-content: space-between; } h2 { margin: 0; letter-spacing: -.04em; font-size: 27px; }
 .tunnel-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .tunnel-card, .panel, .config-panel { background: linear-gradient(145deg, rgba(25,34,42,.9), rgba(15,21,27,.92)); border: 1px solid var(--line); border-radius: var(--radius); }
-.tunnel-card { padding: 22px; min-height: 253px; display: flex; flex-direction: column; transition: transform .18s ease, border-color .18s ease; }
+.tunnel-card { position: relative; padding: 22px; min-height: 253px; display: flex; flex-direction: column; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease; }
 .tunnel-card:hover { transform: translateY(-3px); border-color: #496170; }
+.tunnel-card.running { border-color: rgba(108,224,196,.8); background: linear-gradient(145deg, rgba(25,48,48,.96), rgba(15,28,29,.92)); box-shadow: inset 0 0 0 1px rgba(108,224,196,.14), 0 0 28px rgba(108,224,196,.09); }
+.tunnel-card.running::before { content: "ACTIVE"; position: absolute; top: 0; right: 0; padding: 4px 8px; color: #081614; background: var(--teal); font: 9px var(--mono); font-weight: 800; letter-spacing: .1em; }
+.tunnel-card.failed { border-color: rgba(255,117,106,.8); box-shadow: inset 0 0 0 1px rgba(255,117,106,.12); }
+.tunnel-card.starting, .tunnel-card.stopping { border-color: rgba(255,157,88,.75); }
 .tunnel-top, .panel-heading, .config-footer, .button-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .mode-pill { font: 10px var(--mono); color: var(--teal); border: 1px solid rgba(108,224,196,.34); padding: 4px 7px; text-transform: uppercase; letter-spacing: .08em; }.mode-pill small { font: inherit; color: var(--muted); letter-spacing: .02em; text-transform: none; }.mode-pill.egress { color: var(--orange); border-color: rgba(255,157,88,.42); }
 .runtime-state { font: 10px var(--mono); text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }.runtime-state.running { color: var(--teal); }.runtime-state.failed { color: var(--danger); }.runtime-state.starting, .runtime-state.stopping { color: var(--orange); }

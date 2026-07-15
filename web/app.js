@@ -44,7 +44,7 @@
     tunnelGrid.innerHTML = state.tunnels.map((tunnel) => {
       const runtime = runtimeFor(tunnel.alias);
       const role = tunnelRole(tunnel.mode);
-      return `<article class="tunnel-card">
+      return `<article class="tunnel-card ${escapeHtml(runtime.state)}">
         <div class="tunnel-top"><span class="mode-pill ${role.className}">${role.name} <small>· ${role.detail}</small></span><span class="runtime-state ${escapeHtml(runtime.state)}">${escapeHtml(runtime.state)}</span></div>
         <h3>${escapeHtml(tunnel.alias)}</h3>
         <p class="destination">UDP DESTINATION<br><b>${escapeHtml(tunnel.udp_destination)}</b></p>
