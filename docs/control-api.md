@@ -2,6 +2,9 @@
 
 This document defines the API implemented by the local control server. It is not a remote-management feature.
 
+For tools that consume an OpenAPI description, use [openapi.yaml](openapi.yaml).
+For the browser interface, see the [local control dashboard guide](control-ui.md).
+
 Start it with the same named-tunnel configuration used by the CLI:
 
 ```sh

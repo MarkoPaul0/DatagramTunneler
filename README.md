@@ -167,19 +167,29 @@ udp_destination = "replicate_client"
 
 `config edit` creates the starter file if needed, then opens it using `$VISUAL`, `$EDITOR`, or TextEdit, `vi`, or Notepad. The parser rejects unknown fields, duplicate aliases, invalid IPv4 addresses, and invalid ports. `tunnel run` runs in the foreground.
 
-### Local control API (experimental)
+### Local control dashboard
 
-For local automation or the built-in dashboard, start the localhost-only control service:
+Start the localhost-only control service to use the supported browser dashboard:
 
 ```sh
 dgramtunneler control serve --port 8765
 open http://127.0.0.1:8765
 ```
 
-The dashboard provides tunnel lifecycle controls, a dummy-producer form, live
-events, and a TOML editor. The same service exposes HTTP endpoints and a
-WebSocket event stream. It binds only to `127.0.0.1` and has no authentication,
-so do not expose it through a proxy or port forward. See the [control API reference](docs/control-api.md).
+The dashboard provides tunnel lifecycle controls, a dummy-producer form,
+per-tunnel throughput and latency statistics, the ten most recent datagram
+observations, live events, and a TOML editor. See the [dashboard guide](docs/control-ui.md).
+
+It binds only to `127.0.0.1` and has no authentication, so do not expose it
+through a proxy or port forward.
+
+### Local control API
+
+The same localhost-only service exposes a versioned HTTP API and a WebSocket
+event stream for local automation and integrations. Start it with the command
+above, then use the [OpenAPI definition](docs/openapi.yaml) to generate a
+client or import it into an API tool. The [control API reference](docs/control-api.md)
+covers the event stream, error format, and compatibility policy.
 
 ### Compact live output
 
