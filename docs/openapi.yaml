@@ -384,5 +384,7 @@ x-websocket:
   /api/v1/events:
     description: |
       WebSocket event stream. The server sends event messages; clients do not
-      issue commands on the socket. See `docs/control-api.md` for its message
-      schema and initial runtime snapshot behaviour.
+      issue commands on the socket. A connected client receives a complete
+      initial runtime snapshot, then a bounded metrics snapshot for each active
+      runtime once per second. See `docs/control-api.md` for its message schema
+      and reconnect behaviour.

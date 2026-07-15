@@ -99,6 +99,13 @@ server can calculate it. Datagram payloads are never retained or returned.
 
 Event kinds are `lifecycle`, `log`, and `metrics`. A new connection receives a complete runtime snapshot before subsequent events, so the UI can recover after reconnecting.
 
+While one or more WebSocket clients are connected, the server emits a bounded
+`metrics` snapshot for each active runtime once per second. These snapshots
+include aggregate metrics and the current rolling `recent_datagrams` buffer;
+they are not emitted once per forwarded datagram. This permits one WebSocket to
+carry telemetry for multiple tunnels without unbounded traffic. `GET /runtimes`
+remains the initial-load and reconnect fallback.
+
 ## Errors
 
 Every non-success response uses this shape:

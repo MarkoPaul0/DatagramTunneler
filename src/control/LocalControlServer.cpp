@@ -24,6 +24,7 @@ namespace {
 
 constexpr std::size_t kMaximumRequestSize = 1024U * 1024U;
 constexpr std::string_view kWebSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+constexpr std::chrono::seconds kMetricsPublishInterval{1};
 
 struct HttpRequest {
     std::string method;
@@ -454,19 +455,23 @@ void LocalControlServer::run() {
         throw std::runtime_error("could not listen for local control requests (error " + std::to_string(lastSocketError()) + ")");
     }
     listener_ = std::move(socket);
+    auto next_metrics_publish = std::chrono::steady_clock::now() + kMetricsPublishInterval;
     while (!stop_requested_) {
         sockaddr_in remote{};
         SocketAddressLength length = sizeof(remote);
         Socket client(accept(listener_.get(), reinterpret_cast<sockaddr*>(&remote), &length));
-        if (!client.valid()) {
-            if (stop_requested_ || isReceiveTimeout(lastSocketError())) continue;
-            continue;
-        }
+        if (client.valid()) {
 #ifdef __APPLE__
-        const int disable_sigpipe = 1;
-        static_cast<void>(setSocketOption(client.get(), SOL_SOCKET, SO_NOSIGPIPE, disable_sigpipe));
+            const int disable_sigpipe = 1;
+            static_cast<void>(setSocketOption(client.get(), SOL_SOCKET, SO_NOSIGPIPE, disable_sigpipe));
 #endif
-        serveConnection(std::move(client));
+            serveConnection(std::move(client));
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= next_metrics_publish) {
+            broadcastMetricSnapshots();
+            next_metrics_publish = now + kMetricsPublishInterval;
+        }
     }
 }
 
@@ -630,6 +635,27 @@ void LocalControlServer::broadcastEvent(const ControlEvent& event) {
         clients_.erase(std::remove_if(clients_.begin(), clients_.end(), [&](const auto& client) {
             return std::find(failed.begin(), failed.end(), client) != failed.end();
         }), clients_.end());
+    }
+}
+
+void LocalControlServer::broadcastMetricSnapshots() {
+    {
+        const std::lock_guard<std::mutex> lock(clients_mutex_);
+        if (clients_.empty()) {
+            return;
+        }
+    }
+    for (const TunnelSnapshot& snapshot : runtime_.snapshots()) {
+        if (snapshot.state != TunnelState::Starting && snapshot.state != TunnelState::Running &&
+            snapshot.state != TunnelState::Stopping) {
+            continue;
+        }
+        ControlEvent event;
+        event.kind = EventKind::Metrics;
+        event.alias = snapshot.alias;
+        event.message = "Runtime telemetry";
+        event.snapshot = snapshot;
+        broadcastEvent(event);
     }
 }
 

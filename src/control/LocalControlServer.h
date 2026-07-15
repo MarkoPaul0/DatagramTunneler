@@ -37,6 +37,7 @@ private:
 
     void serveConnection(Socket socket);
     void broadcastEvent(const ControlEvent& event);
+    void broadcastMetricSnapshots();
 
     LocalControlServerOptions options_;
     ControlService control_service_;

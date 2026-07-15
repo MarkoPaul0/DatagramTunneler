@@ -160,7 +160,7 @@
     const event = message.event;
     if (!event) return;
     if (event.snapshot) state.runtimes.set(`${event.snapshot.kind}:${event.snapshot.alias}`, event.snapshot);
-    addEvent(event);
+    if (event.kind !== 'metrics') addEvent(event);
     renderTunnels();
   }
 
@@ -256,5 +256,7 @@
   refresh();
   setView(location.hash === '#configuration' ? 'configuration' : 'operations', false);
   connectEvents();
-  window.setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 2000);
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible' && state.socket?.readyState !== WebSocket.OPEN) refresh();
+  }, 2000);
 })();
