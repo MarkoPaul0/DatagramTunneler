@@ -17,7 +17,8 @@ open http://127.0.0.1:8765
 - A dummy-producer form for any client tunnel.
 - A selected-tunnel view with current throughput and latency statistics, recent
   control events, and the last ten datagram observations.
-- A TOML editor for the active named-tunnel configuration.
+- A guided editor for adding, editing, and deleting client and server tunnels,
+  alongside a direct TOML editor for file-oriented changes.
 
 Datagram observations contain a timestamp, byte count, and latency when a
 server can calculate it. Payload contents are never stored or displayed.

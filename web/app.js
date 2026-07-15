@@ -1,6 +1,9 @@
 (() => {
   const api = '/api/v1';
-  const state = { tunnels: [], runtimes: new Map(), events: [], selectedAlias: null, socket: null, retry: null, view: 'operations', configDirty: false };
+  const state = {
+    tunnels: [], runtimes: new Map(), events: [], selectedAlias: null, socket: null, retry: null,
+    view: 'operations', configDirty: false, configMode: 'form', configModel: []
+  };
   const $ = (selector) => document.querySelector(selector);
   const tunnelGrid = $('#tunnel-grid');
   const eventList = $('#event-list');
@@ -191,7 +194,136 @@
     try {
       const response = await request('/config');
       $('#config-editor').value = response.toml || '';
+      state.configModel = parseTomlConfiguration(response.toml || '');
+      renderConfigForm();
     } catch (error) { notify(error.message, true); }
+  }
+
+  function tomlValue(value) {
+    return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  }
+
+  function tomlString(value) {
+    const match = String(value).trim().match(/^"((?:\\.|[^"\\])*)"$/);
+    if (!match) throw new Error('Guided editor supports quoted string values only. Use TOML file mode for this configuration.');
+    return match[1].replace(/\\([\\"])/g, '$1');
+  }
+
+  function parseTomlConfiguration(toml) {
+    const tunnels = [];
+    let tunnel = null;
+    for (const rawLine of String(toml).split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#') || line === 'version = 1') continue;
+      const header = line.match(/^\[tunnels\.([A-Za-z0-9_-]+)\]$/);
+      if (header) {
+        tunnel = { alias: header[1], mode: '', udp_interface: '', udp_group: '', tcp_server: '', tcp_listen_port: '', udp_destination: '' };
+        tunnels.push(tunnel);
+        continue;
+      }
+      const field = line.match(/^([a-z_]+)\s*=\s*(.+)$/);
+      if (!field || !tunnel) throw new Error('Guided editor supports the standard named-tunnel TOML format only. Use TOML file mode for this configuration.');
+      const [ , name, rawValue ] = field;
+      if (!['mode', 'udp_interface', 'udp_group', 'tcp_server', 'tcp_listen_port', 'udp_destination'].includes(name)) {
+        throw new Error('Guided editor supports the standard named-tunnel TOML format only. Use TOML file mode for this configuration.');
+      }
+      tunnel[name] = name === 'tcp_listen_port' ? String(Number(rawValue.trim())) : tomlString(rawValue);
+    }
+    return tunnels;
+  }
+
+  function collectFormTunnels() {
+    return [...document.querySelectorAll('[data-config-tunnel]')].map((card) => {
+      const field = (name) => card.querySelector(`[data-config-field="${name}"]`)?.value.trim() || '';
+      return {
+        alias: field('alias'), mode: field('mode'), udp_interface: field('udp_interface'), udp_group: field('udp_group'),
+        tcp_server: field('tcp_server'), tcp_listen_port: field('tcp_listen_port'), udp_destination: field('udp_destination')
+      };
+    });
+  }
+
+  function validateFormTunnels(tunnels) {
+    const aliases = new Set();
+    for (const tunnel of tunnels) {
+      if (!/^[A-Za-z0-9_-]+$/.test(tunnel.alias)) throw new Error('Tunnel aliases may contain letters, numbers, hyphens, and underscores only.');
+      if (aliases.has(tunnel.alias)) throw new Error(`Tunnel alias '${tunnel.alias}' is duplicated.`);
+      aliases.add(tunnel.alias);
+      if (!['client', 'server'].includes(tunnel.mode)) throw new Error(`Tunnel '${tunnel.alias}' must be a client or server.`);
+      if (!tunnel.udp_interface) throw new Error(`Tunnel '${tunnel.alias}' requires a UDP interface.`);
+      if (tunnel.mode === 'client' && (!tunnel.udp_group || !tunnel.tcp_server)) throw new Error(`Client tunnel '${tunnel.alias}' requires a UDP group and TCP server.`);
+      if (tunnel.mode === 'server' && !/^\d+$/.test(tunnel.tcp_listen_port)) throw new Error(`Server tunnel '${tunnel.alias}' requires a TCP listen port.`);
+    }
+  }
+
+  function serializeFormTunnels(tunnels) {
+    validateFormTunnels(tunnels);
+    const output = ['version = 1'];
+    for (const tunnel of tunnels) {
+      output.push('', `[tunnels.${tunnel.alias}]`, `mode = ${tomlValue(tunnel.mode)}`, `udp_interface = ${tomlValue(tunnel.udp_interface)}`);
+      if (tunnel.mode === 'client') {
+        output.push(`udp_group = ${tomlValue(tunnel.udp_group)}`, `tcp_server = ${tomlValue(tunnel.tcp_server)}`);
+      } else {
+        output.push(`tcp_listen_port = ${tunnel.tcp_listen_port}`);
+        if (tunnel.udp_destination) output.push(`udp_destination = ${tomlValue(tunnel.udp_destination)}`);
+      }
+    }
+    return `${output.join('\n')}\n`;
+  }
+
+  function tunnelEditor(tunnel, index) {
+    const modeFields = tunnel.mode === 'server'
+      ? `<label>TCP listen port<input data-config-field="tcp_listen_port" type="number" min="1" max="65535" value="${escapeAttribute(tunnel.tcp_listen_port)}" required></label>
+         <label>UDP destination <input data-config-field="udp_destination" value="${escapeAttribute(tunnel.udp_destination)}" placeholder="239.1.2.4:5000 or replicate_client"></label>`
+      : `<label>UDP multicast group<input data-config-field="udp_group" value="${escapeAttribute(tunnel.udp_group)}" placeholder="239.1.2.3:5000" required></label>
+         <label>TCP server<input data-config-field="tcp_server" value="${escapeAttribute(tunnel.tcp_server)}" placeholder="192.168.1.10:14052" required></label>`;
+    return `<article class="tunnel-editor" data-config-tunnel="${index}">
+      <div class="tunnel-editor-heading"><span class="panel-number">${tunnel.mode === 'server' ? 'EGRESS' : 'INGRESS'}</span><button class="text-button delete-tunnel" data-delete-tunnel="${index}" type="button">Delete</button></div>
+      <div class="editor-fields editor-fields-top">
+        <label>Alias<input data-config-field="alias" value="${escapeAttribute(tunnel.alias)}" required></label>
+        <label>Mode<select data-config-field="mode"><option value="client"${tunnel.mode === 'client' ? ' selected' : ''}>Client / ingress</option><option value="server"${tunnel.mode === 'server' ? ' selected' : ''}>Server / egress</option></select></label>
+        <label>UDP interface<input data-config-field="udp_interface" value="${escapeAttribute(tunnel.udp_interface)}" placeholder="192.168.1.20" required></label>
+      </div>
+      <div class="editor-fields">${modeFields}</div>
+    </article>`;
+  }
+
+  function renderConfigForm() {
+    const list = $('#tunnel-editor-list');
+    list.innerHTML = state.configModel.length
+      ? state.configModel.map(tunnelEditor).join('')
+      : '<div class="empty-state">No named tunnels yet. Add a client or server route to begin.</div>';
+  }
+
+  function setConfigMode(mode) {
+    const nextMode = mode === 'toml' ? 'toml' : 'form';
+    if (nextMode === 'toml') {
+      try {
+        state.configModel = collectFormTunnels();
+        $('#config-editor').value = serializeFormTunnels(state.configModel);
+      } catch (error) { notify(error.message, true); return; }
+    } else {
+      try {
+        state.configModel = parseTomlConfiguration($('#config-editor').value);
+        renderConfigForm();
+      } catch (error) { notify(error.message, true); return; }
+    }
+    state.configMode = nextMode;
+    $('#config-form-view').hidden = nextMode !== 'form';
+    $('#config-toml-view').hidden = nextMode !== 'toml';
+    document.querySelectorAll('.config-mode-tab').forEach((tab) => {
+      const active = tab.dataset.configMode === nextMode;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-selected', String(active));
+    });
+  }
+
+  async function saveConfiguration(toml) {
+    await request('/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toml }) });
+    $('#config-editor').value = toml;
+    state.configModel = parseTomlConfiguration(toml);
+    state.configDirty = false;
+    notify('Configuration saved');
+    await refresh();
   }
 
   async function refresh() {
@@ -248,10 +380,43 @@
     catch (error) { notify(error.message, true); }
   });
   $('#save-config').addEventListener('click', async () => {
-    try { await request('/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toml: $('#config-editor').value }) }); state.configDirty = false; notify('Configuration saved'); await refresh(); }
+    try { await saveConfiguration($('#config-editor').value); }
     catch (error) { notify(error.message, true); }
   });
   $('#config-editor').addEventListener('input', () => { state.configDirty = true; });
+  document.querySelectorAll('.config-mode-tab').forEach((tab) => tab.addEventListener('click', () => setConfigMode(tab.dataset.configMode)));
+  $('#add-tunnel').addEventListener('click', () => {
+    state.configModel = collectFormTunnels();
+    state.configModel.push({ alias: 'new-tunnel', mode: 'client', udp_interface: '', udp_group: '', tcp_server: '', tcp_listen_port: '', udp_destination: '' });
+    state.configDirty = true;
+    renderConfigForm();
+  });
+  $('#tunnel-editor-list').addEventListener('input', (event) => {
+    if (event.target.matches('[data-config-field]')) state.configDirty = true;
+  });
+  $('#tunnel-editor-list').addEventListener('change', (event) => {
+    if (!event.target.matches('[data-config-field="mode"]')) return;
+    state.configModel = collectFormTunnels();
+    const card = event.target.closest('[data-config-tunnel]');
+    state.configModel[Number(card.dataset.configTunnel)].mode = event.target.value;
+    state.configDirty = true;
+    renderConfigForm();
+  });
+  $('#tunnel-editor-list').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-delete-tunnel]');
+    if (!button) return;
+    state.configModel = collectFormTunnels();
+    state.configModel.splice(Number(button.dataset.deleteTunnel), 1);
+    state.configDirty = true;
+    renderConfigForm();
+  });
+  $('#save-form-config').addEventListener('click', async () => {
+    try {
+      state.configModel = collectFormTunnels();
+      await saveConfiguration(serializeFormTunnels(state.configModel));
+      renderConfigForm();
+    } catch (error) { notify(error.message, true); }
+  });
 
   refresh();
   setView(location.hash === '#configuration' ? 'configuration' : 'operations', false);

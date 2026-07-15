@@ -133,12 +133,29 @@
         <span class="config-note">Validated before save</span>
       </section>
       <section class="config-panel">
-        <label class="sr-only" for="config-editor">TOML configuration</label>
-        <textarea id="config-editor" spellcheck="false" aria-describedby="config-help"></textarea>
-        <div class="config-footer">
-          <p id="config-help">Changes update the active local configuration file. Running tunnels are not restarted automatically.</p>
-          <button class="primary-button" id="save-config" type="button">Save configuration <span>→</span></button>
+        <div class="config-mode-tabs" role="tablist" aria-label="Configuration editing mode">
+          <button class="config-mode-tab active" id="config-form-tab" type="button" role="tab" aria-selected="true" aria-controls="config-form-view" data-config-mode="form">Guided editor</button>
+          <button class="config-mode-tab" id="config-toml-tab" type="button" role="tab" aria-selected="false" aria-controls="config-toml-view" data-config-mode="toml">TOML file</button>
         </div>
+        <section id="config-form-view" class="config-mode-view" role="tabpanel" aria-labelledby="config-form-tab">
+          <div class="config-form-heading">
+            <p>Define client ingress and server egress routes without editing TOML directly.</p>
+            <button class="ghost-button" id="add-tunnel" type="button">Add tunnel <span>+</span></button>
+          </div>
+          <div class="tunnel-editor-list" id="tunnel-editor-list" aria-live="polite"></div>
+          <div class="config-footer">
+            <p>Changes update the active local configuration file. Running tunnels are not restarted automatically.</p>
+            <button class="primary-button" id="save-form-config" type="button">Save configuration <span>→</span></button>
+          </div>
+        </section>
+        <section id="config-toml-view" class="config-mode-view" role="tabpanel" aria-labelledby="config-toml-tab" hidden>
+          <label class="sr-only" for="config-editor">TOML configuration</label>
+          <textarea id="config-editor" spellcheck="false" aria-describedby="config-help"></textarea>
+          <div class="config-footer">
+            <p id="config-help">Use this mode for direct TOML editing. Changes are validated before they are saved.</p>
+            <button class="primary-button" id="save-config" type="button">Save configuration <span>→</span></button>
+          </div>
+        </section>
       </section>
       </section>
     </main>
