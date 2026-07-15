@@ -169,16 +169,17 @@ udp_destination = "replicate_client"
 
 ### Local control API (experimental)
 
-For local automation or a future UI, start the localhost-only control service:
+For local automation or the built-in dashboard, start the localhost-only control service:
 
 ```sh
 dgramtunneler control serve --port 8765
-curl http://127.0.0.1:8765/api/v1/tunnels
+open http://127.0.0.1:8765
 ```
 
-It provides HTTP lifecycle and configuration endpoints plus a WebSocket event
-stream. It binds only to `127.0.0.1` and has no authentication, so do not expose
-it through a proxy or port forward. See the [control API reference](docs/control-api.md).
+The dashboard provides tunnel lifecycle controls, a dummy-producer form, live
+events, and a TOML editor. The same service exposes HTTP endpoints and a
+WebSocket event stream. It binds only to `127.0.0.1` and has no authentication,
+so do not expose it through a proxy or port forward. See the [control API reference](docs/control-api.md).
 
 ### Compact live output
 

@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "control/ControlApi.h"
+#include "control/WebAssets.h"
 
 namespace control {
 namespace {
@@ -294,6 +295,15 @@ bool sendJson(SocketHandle socket, int status, std::string_view body) {
     return sendAll(socket, response);
 }
 
+bool sendAsset(SocketHandle socket, std::string_view content_type, std::string_view body) {
+    const std::string response = "HTTP/1.1 200 OK\r\nContent-Type: " + std::string(content_type) +
+        "; charset=utf-8\r\nContent-Length: " + std::to_string(body.size()) +
+        "\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n"
+        "Content-Security-Policy: default-src 'self'; connect-src 'self' ws: wss:; style-src 'self'; script-src 'self'\r\n"
+        "Connection: close\r\n\r\n" + std::string(body);
+    return sendAll(socket, response);
+}
+
 // Compact SHA-1 implementation used only for the standard WebSocket handshake.
 std::array<std::uint8_t, 20> sha1(std::string_view input) {
     std::vector<std::uint8_t> bytes(input.begin(), input.end());
@@ -440,6 +450,18 @@ void LocalControlServer::serveConnection(Socket socket) {
     }
     const std::string path = request->target.substr(0, request->target.find('?'));
     try {
+        if (request->method == "GET" && (path == "/" || path == "/index.html")) {
+            static_cast<void>(sendAsset(socket.get(), "text/html", web_assets::kIndexHtml));
+            return;
+        }
+        if (request->method == "GET" && path == "/assets/styles.css") {
+            static_cast<void>(sendAsset(socket.get(), "text/css", web_assets::kStylesCss));
+            return;
+        }
+        if (request->method == "GET" && path == "/assets/app.js") {
+            static_cast<void>(sendAsset(socket.get(), "application/javascript", web_assets::kAppJs));
+            return;
+        }
         if (request->method == "GET" && path == api::kHealthPath) {
             static_cast<void>(sendJson(socket.get(), 200, "{\"service\":\"dgramtunneler\",\"api_version\":\"v1\",\"ready\":true}"));
             return;

@@ -12,7 +12,7 @@ dgramtunneler control serve --port 8765
 
 - Bind only to `127.0.0.1` by default; IPv6 loopback support may be added alongside it.
 - Do not accept a non-loopback bind address in this API version.
-- A future packaged UI will use the same local origin.
+- The packaged dashboard is served from the same local origin at `/`.
 - Use JSON request and response bodies, with UTF-8 encoding.
 - Prefix every endpoint and WebSocket message with API version `v1`.
 - Remote exposure, authentication, origin policy, and CSRF controls are deliberately deferred to Task 33.

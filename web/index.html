@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>DatagramTunneler · local control</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to dashboard</a>
+    <div class="signal-grid" aria-hidden="true"></div>
+    <header class="masthead">
+      <a class="brand" href="/" aria-label="DatagramTunneler dashboard">
+        <span class="brand-mark"><i></i><i></i><i></i></span>
+        <span>Datagram<span>Tunneler</span></span>
+      </a>
+      <div class="connection-state" id="connection-state" aria-live="polite">
+        <span class="state-dot"></span><span>CONNECTING</span>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">LOCAL CONTROL PLANE · V1</p>
+          <h1>See every route.<br><em>Move with confidence.</em></h1>
+          <p class="lede">Operate named multicast tunnels, launch test producers, and watch lifecycle events without leaving your local machine.</p>
+        </div>
+        <div class="hero-meta">
+          <span>BOUND TO</span><strong>127.0.0.1</strong>
+          <span>REFRESH</span><strong>2 seconds</strong>
+        </div>
+      </section>
+
+      <section class="section-head" aria-labelledby="routes-heading">
+        <div>
+          <p class="eyebrow">01 / ROUTES</p>
+          <h2 id="routes-heading">Tunnel deck</h2>
+        </div>
+        <button class="ghost-button" id="refresh-button" type="button">Refresh now <span>↻</span></button>
+      </section>
+      <section class="tunnel-grid" id="tunnel-grid" aria-live="polite" aria-label="Configured tunnels">
+        <div class="empty-state">Loading configured tunnels…</div>
+      </section>
+
+      <section class="operations-grid">
+        <article class="panel producer-panel" aria-labelledby="producer-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">02 / TEST SIGNAL</p>
+              <h2 id="producer-heading">Dummy producer</h2>
+            </div>
+            <span class="panel-number">UDP</span>
+          </div>
+          <p class="panel-copy">Send a known packet sequence to any configured client group.</p>
+          <form id="producer-form">
+            <label>Client tunnel
+              <select id="producer-alias" name="alias" required></select>
+            </label>
+            <div class="field-row">
+              <label>Interval (ms)
+                <input id="producer-interval" name="interval" type="number" min="1" value="1000" required>
+              </label>
+              <label>Packet count
+                <input id="producer-count" name="count" type="number" min="1" placeholder="Continuous">
+              </label>
+            </div>
+            <label>Payload prefix
+              <input id="producer-prefix" name="prefix" value="Dummy datagram" required>
+            </label>
+            <div class="button-row">
+              <button class="primary-button" type="submit">Start producer <span>→</span></button>
+              <button class="ghost-button" id="producer-stop" type="button">Stop</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="panel stream-panel" aria-labelledby="stream-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">03 / LIVE STREAM</p>
+              <h2 id="stream-heading">Control events</h2>
+            </div>
+            <button class="text-button" id="clear-events" type="button">Clear</button>
+          </div>
+          <ol class="event-list" id="event-list" aria-live="polite">
+            <li class="event-empty">Waiting for lifecycle events…</li>
+          </ol>
+        </article>
+      </section>
+
+      <section class="section-head config-section-head" aria-labelledby="config-heading">
+        <div>
+          <p class="eyebrow">04 / SOURCE OF TRUTH</p>
+          <h2 id="config-heading">Configuration</h2>
+        </div>
+        <span class="config-note">Validated before save</span>
+      </section>
+      <section class="config-panel">
+        <label class="sr-only" for="config-editor">TOML configuration</label>
+        <textarea id="config-editor" spellcheck="false" aria-describedby="config-help"></textarea>
+        <div class="config-footer">
+          <p id="config-help">Changes update the active local configuration file. Running tunnels are not restarted automatically.</p>
+          <button class="primary-button" id="save-config" type="button">Save configuration <span>→</span></button>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/assets/app.js" defer></script>
+  </body>
+</html>
