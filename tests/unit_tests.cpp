@@ -219,14 +219,32 @@ bool testManagedProducerRuntime() {
     options.interval_ms = 1;
     runtime.startProducer("example-client", options);
 
-    for (int attempt = 0; attempt < 100; ++attempt) {
+    // Creating and sending on a multicast socket can take noticeably longer on
+    // Windows runners than on Unix hosts. Use a real deadline instead of a
+    // one-second polling budget so this remains a lifecycle test rather than a
+    // scheduler-speed test.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    control::TunnelSnapshot latest_snapshot;
+    while (std::chrono::steady_clock::now() < deadline) {
         const std::vector<control::TunnelSnapshot> snapshots = runtime.snapshots();
-        if (snapshots.size() == 1 && snapshots.front().state == control::TunnelState::Stopped) {
-            return expect(snapshots.front().kind == control::RuntimeKind::Producer,
+        if (snapshots.size() == 1) {
+            latest_snapshot = snapshots.front();
+        }
+        if (latest_snapshot.state == control::TunnelState::Stopped) {
+            return expect(latest_snapshot.kind == control::RuntimeKind::Producer,
                           "managed producer must be identified as a producer") &&
                    expect(event_sink.size() >= 3, "managed producer must publish lifecycle events");
         }
+        if (latest_snapshot.state == control::TunnelState::Failed) {
+            std::fprintf(stderr, "Test failure: managed producer failed: %s\n", latest_snapshot.detail.c_str());
+            return false;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (!latest_snapshot.detail.empty()) {
+        std::fprintf(stderr, "Test failure: managed producer did not stop within five seconds (last state: %d, detail: %s)\n",
+                     static_cast<int>(latest_snapshot.state), latest_snapshot.detail.c_str());
+        return false;
     }
     return expect(false, "managed producer must reach a stopped state");
 }
