@@ -1,6 +1,8 @@
 #include "control/ControlService.h"
 
 #include <cstdint>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -48,6 +50,7 @@ const std::filesystem::path& ControlService::configurationPath() const {
 }
 
 std::vector<TunnelSummary> ControlService::listTunnels() const {
+    const std::lock_guard<std::mutex> lock(mutex_);
     std::vector<TunnelSummary> summaries;
     summaries.reserve(configuration_.tunnels.size());
     for (const NamedTunnel& named_tunnel : configuration_.tunnels) {
@@ -57,6 +60,7 @@ std::vector<TunnelSummary> ControlService::listTunnels() const {
 }
 
 NamedTunnel ControlService::tunnel(std::string_view alias) const {
+    const std::lock_guard<std::mutex> lock(mutex_);
     return findTunnel(configuration_, std::string(alias));
 }
 
@@ -64,6 +68,50 @@ void ControlService::validate(std::string_view alias) const {
     if (!alias.empty()) {
         static_cast<void>(tunnel(alias));
     }
+}
+
+std::string ControlService::configurationToml() const {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    std::ifstream input(configuration_path_);
+    if (!input) {
+        throw std::runtime_error("could not read configuration at " + configuration_path_.string());
+    }
+    std::ostringstream output;
+    output << input.rdbuf();
+    return output.str();
+}
+
+void ControlService::replaceConfiguration(std::string toml) {
+    std::istringstream input(toml);
+    TunnelConfiguration replacement = parseConfiguration(input);
+    const std::lock_guard<std::mutex> lock(mutex_);
+    const std::filesystem::path temporary_path = configuration_path_.string() + ".tmp";
+    {
+        std::ofstream output(temporary_path, std::ios::trunc);
+        if (!output) {
+            throw std::runtime_error("could not write configuration at " + temporary_path.string());
+        }
+        output << toml;
+        if (!output) {
+            throw std::runtime_error("could not write configuration at " + temporary_path.string());
+        }
+    }
+    std::error_code error;
+    std::filesystem::rename(temporary_path, configuration_path_, error);
+#ifdef _WIN32
+    if (error) {
+        error.clear();
+        std::filesystem::remove(configuration_path_, error);
+        if (!error) {
+            std::filesystem::rename(temporary_path, configuration_path_, error);
+        }
+    }
+#endif
+    if (error) {
+        std::filesystem::remove(temporary_path);
+        throw std::runtime_error("could not replace configuration at " + configuration_path_.string());
+    }
+    configuration_ = std::move(replacement);
 }
 
 } // namespace control

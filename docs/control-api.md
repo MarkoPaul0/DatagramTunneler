@@ -1,12 +1,18 @@
 # Local control API
 
-This document defines the API implemented by the future local control server. It is a contract, not a remote-management feature.
+This document defines the API implemented by the local control server. It is not a remote-management feature.
+
+Start it with the same named-tunnel configuration used by the CLI:
+
+```sh
+dgramtunneler control serve --port 8765
+```
 
 ## Transport and security boundary
 
 - Bind only to `127.0.0.1` by default; IPv6 loopback support may be added alongside it.
 - Do not accept a non-loopback bind address in this API version.
-- Serve the packaged UI and API from the same local origin.
+- A future packaged UI will use the same local origin.
 - Use JSON request and response bodies, with UTF-8 encoding.
 - Prefix every endpoint and WebSocket message with API version `v1`.
 - Remote exposure, authentication, origin policy, and CSRF controls are deliberately deferred to Task 33.
@@ -26,9 +32,9 @@ This document defines the API implemented by the future local control server. It
 | `POST` | `/api/v1/tunnels/{alias}/producer/restart` | Restart a producer with supplied options. |
 | `GET` | `/api/v1/runtimes` | List live tunnel and producer snapshots. |
 | `GET` | `/api/v1/config` | Read the active TOML configuration. |
-| `PUT` | `/api/v1/config` | Validate and atomically replace the TOML configuration. |
+| `PUT` | `/api/v1/config` | Validate and replace the active TOML configuration. |
 
-State-changing calls return the resulting runtime snapshot when available. `POST` action bodies are empty unless stated otherwise.
+State-changing calls return `202 Accepted` with `{ "accepted": true }`. `POST` action bodies are empty unless stated otherwise.
 
 ### Producer request
 
@@ -76,7 +82,7 @@ Metrics that are not available, including latency for a producer or unsynchronis
   "event": {
     "kind": "lifecycle",
     "severity": "info",
-    "timestamp": "2026-07-15T14:28:07.123Z",
+    "timestamp_unix_milliseconds": 1784125687123,
     "alias": "example-client",
     "message": "Running",
     "snapshot": { "alias": "example-client", "kind": "tunnel", "state": "running" }
@@ -91,10 +97,7 @@ Event kinds are `lifecycle`, `log`, and `metrics`. A new connection receives a c
 Every non-success response uses this shape:
 
 ```json
-{
-  "code": "not_found",
-  "message": "Tunnel 'missing-link' does not exist"
-}
+{ "error": { "code": "not_found", "message": "Tunnel 'missing-link' does not exist" } }
 ```
 
 | HTTP status | Error code | Meaning |

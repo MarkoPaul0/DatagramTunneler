@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <mutex>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -19,9 +21,12 @@ public:
     std::vector<TunnelSummary> listTunnels() const;
     NamedTunnel tunnel(std::string_view alias) const;
     void validate(std::string_view alias = {}) const;
+    std::string configurationToml() const;
+    void replaceConfiguration(std::string toml);
 
 private:
     std::filesystem::path configuration_path_;
+    mutable std::mutex mutex_;
     TunnelConfiguration configuration_;
 };
 

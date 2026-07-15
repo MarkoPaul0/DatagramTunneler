@@ -23,6 +23,7 @@
 #include "Network.h"
 #include "Producer.h"
 #include "control/ControlService.h"
+#include "control/LocalControlServer.h"
 
 #ifndef DGRAMTUNNELER_VERSION
 #define DGRAMTUNNELER_VERSION "development"
@@ -40,6 +41,7 @@ static void printUsage(const char* binary_name) {
     printf("    %s tunnel validate [alias] [--config <path>]\n", binary_name);
     printf("    %s tunnel run <alias> [--compact] [--config <path>]\n", binary_name);
     printf("    %s producer <client-alias> [--compact] [--config <path>] [--interval-ms <ms>] [--count <n>] [--payload-prefix <text>]\n", binary_name);
+    printf("    %s control serve [--config <path>] [--port <port>]\n", binary_name);
     printf("\nDirect invocation:\n");
     printf("Server mode:\n");
     printf("    %s --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>] [--compact]\n", binary_name);
@@ -104,6 +106,34 @@ struct ProducerCommand {
     DatagramProducer::Options options;
     bool compact_output = false;
 };
+
+struct ControlCommand {
+    std::filesystem::path config_path;
+    std::uint16_t port = 8765;
+};
+
+ControlCommand parseControlCommand(int argc, char* argv[]) {
+    if (argc < 3 || std::string(argv[2]) != "serve") {
+        throw std::runtime_error("control requires the subcommand: serve");
+    }
+    ControlCommand command;
+    for (int index = 3; index < argc; ++index) {
+        const std::string argument = argv[index];
+        if (argument == "--config") {
+            if (index + 1 >= argc) throw std::runtime_error("--config requires a file path");
+            command.config_path = argv[++index];
+        } else if (argument == "--port") {
+            if (index + 1 >= argc) throw std::runtime_error("--port requires a value");
+            const std::size_t port = parsePositiveSize(argv[++index], "--port");
+            if (port > 65535U) throw std::runtime_error("--port must be between 1 and 65535");
+            command.port = static_cast<std::uint16_t>(port);
+        } else {
+            throw std::runtime_error("unknown control option '" + argument + "'");
+        }
+    }
+    if (command.config_path.empty()) command.config_path = defaultConfigurationPath();
+    return command;
+}
 
 ProducerCommand parseProducerCommand(int argc, char* argv[]) {
     ProducerCommand command;
@@ -405,6 +435,16 @@ int runProducerCommand(int argc, char* argv[]) {
     return 0;
 }
 
+int runControlCommand(int argc, char* argv[]) {
+    const ControlCommand command = parseControlCommand(argc, argv);
+    control::LocalControlServerOptions options;
+    options.port = command.port;
+    control::LocalControlServer server(command.config_path, options);
+    INFO("Local control service listening at http://127.0.0.1:%u/api/v1", static_cast<unsigned int>(options.port));
+    server.run();
+    return 0;
+}
+
 } // namespace
 
 
@@ -429,6 +469,9 @@ int main(int argc, char* argv[]) {
         }
         if (argc >= 2 && std::string(argv[1]) == "producer") {
             return runProducerCommand(argc, argv);
+        }
+        if (argc >= 2 && std::string(argv[1]) == "control") {
+            return runControlCommand(argc, argv);
         }
     } catch (const std::exception& error) {
         ERROR("%s", error.what());

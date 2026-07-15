@@ -24,6 +24,7 @@ add_executable(dgramtunneler
     src/Producer.cpp
     src/DatagramTunneler.cpp
     src/control/ControlService.cpp
+    src/control/LocalControlServer.cpp
     src/control/ManagedTunnelRuntime.cpp)
 
 target_compile_features(dgramtunneler PRIVATE cxx_std_20)
@@ -84,6 +85,7 @@ if(BUILD_TESTING)
         src/LiveOutput.cpp
         src/DatagramTunneler.cpp
         src/control/ControlService.cpp
+        src/control/LocalControlServer.cpp
         src/control/ManagedTunnelRuntime.cpp
         src/Producer.cpp)
     target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_20)

@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -169,6 +170,27 @@ bool testControlServiceCatalog() {
                   "control service must expose a direct command equivalent");
 }
 
+bool testControlServiceConfigurationUpdate() {
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "dgramtunneler-control-service-test.toml";
+    {
+        std::ofstream output(path);
+        output << "version = 1\n\n[tunnels.before]\nmode = \"client\"\nudp_interface = \"127.0.0.1\"\nudp_group = \"239.1.2.3:5000\"\ntcp_server = \"127.0.0.1:14052\"\n";
+    }
+    try {
+        control::ControlService service(path);
+        service.replaceConfiguration("version = 1\n\n[tunnels.after]\nmode = \"server\"\nudp_interface = \"127.0.0.1\"\ntcp_listen_port = 14052\nudp_destination = \"239.1.2.4:5000\"\n");
+        const bool passed = expect(service.tunnel("after").config.tcp_srv_port_ == 14052,
+                                  "control service must use a validated configuration replacement") &&
+                            expect(service.configurationToml().find("[tunnels.after]") != std::string::npos,
+                                   "control service must persist a configuration replacement");
+        std::filesystem::remove(path);
+        return passed;
+    } catch (...) {
+        std::filesystem::remove(path);
+        throw;
+    }
+}
+
 class RecordingEventSink final : public control::EventSink {
 public:
     void publish(const control::ControlEvent& event) override {
@@ -232,7 +254,7 @@ int main() {
     }
     return testProtocolFraming() && testClientCommandLineParsing() && testCompactCommandLineParsing() && testNamedTunnelConfiguration() &&
                    testInvalidNamedTunnelConfiguration() && testControlServiceCatalog() && testManagedProducerRuntime()
-                   && testControlApiContract()
+                   && testControlServiceConfigurationUpdate() && testControlApiContract()
                ? 0
                : 1;
 }

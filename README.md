@@ -167,6 +167,19 @@ udp_destination = "replicate_client"
 
 `config edit` creates the starter file if needed, then opens it using `$VISUAL`, `$EDITOR`, or TextEdit, `vi`, or Notepad. The parser rejects unknown fields, duplicate aliases, invalid IPv4 addresses, and invalid ports. `tunnel run` runs in the foreground.
 
+### Local control API (experimental)
+
+For local automation or a future UI, start the localhost-only control service:
+
+```sh
+dgramtunneler control serve --port 8765
+curl http://127.0.0.1:8765/api/v1/tunnels
+```
+
+It provides HTTP lifecycle and configuration endpoints plus a WebSocket event
+stream. It binds only to `127.0.0.1` and has no authentication, so do not expose
+it through a proxy or port forward. See the [control API reference](docs/control-api.md).
+
 ### Compact live output
 
 For a running tunnel, add `--compact` to keep one live statistics line and the
