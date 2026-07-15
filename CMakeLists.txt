@@ -22,9 +22,11 @@ add_executable(dgramtunneler
     src/Network.cpp
     src/LiveOutput.cpp
     src/Producer.cpp
-    src/DatagramTunneler.cpp)
+    src/DatagramTunneler.cpp
+    src/control/ControlService.cpp)
 
 target_compile_features(dgramtunneler PRIVATE cxx_std_20)
+target_include_directories(dgramtunneler PRIVATE src)
 target_compile_definitions(dgramtunneler PRIVATE
     DGRAMTUNNELER_VERSION="${PROJECT_VERSION}")
 set_target_properties(dgramtunneler PROPERTIES
@@ -79,7 +81,8 @@ if(BUILD_TESTING)
         src/Configuration.cpp
         src/Network.cpp
         src/LiveOutput.cpp
-        src/DatagramTunneler.cpp)
+        src/DatagramTunneler.cpp
+        src/control/ControlService.cpp)
     target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_20)
     set_target_properties(dgramtunneler_unit_tests PROPERTIES
         CXX_EXTENSIONS OFF)

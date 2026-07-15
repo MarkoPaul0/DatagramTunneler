@@ -22,6 +22,7 @@
 #include "LiveOutput.h"
 #include "Network.h"
 #include "Producer.h"
+#include "control/ControlService.h"
 
 #ifndef DGRAMTUNNELER_VERSION
 #define DGRAMTUNNELER_VERSION "development"
@@ -270,47 +271,14 @@ std::string compactProducerContext(const DatagramTunneler::Config& config, const
            std::to_string(options.interval_ms) + " ms";
 }
 
-std::string udpDestination(const NamedTunnel& tunnel) {
-    if (!tunnel.config.is_client_ && tunnel.config.use_clt_grp_) {
-        return std::string(kReplicateClientDestination);
-    }
-    return endpoint(tunnel.config.udp_dst_ip_, tunnel.config.udp_dst_port_);
-}
-
-std::string directCommand(const NamedTunnel& tunnel) {
-    const DatagramTunneler::Config& config = tunnel.config;
-    if (config.is_client_) {
-        return "dgramtunneler --client -i " + config.udp_iface_ip_ + " -t " +
-               endpoint(config.tcp_srv_ip_, config.tcp_srv_port_) + " -u " +
-               endpoint(config.udp_dst_ip_, config.udp_dst_port_);
-    }
-
-    std::string command = "dgramtunneler --server -i " + config.udp_iface_ip_ +
-                          " -t " + std::to_string(config.tcp_srv_port_);
-    if (!config.use_clt_grp_) {
-        command += " -u " + endpoint(config.udp_dst_ip_, config.udp_dst_port_);
-    }
-    return command;
-}
-
-void printTunnelList(const TunnelConfiguration& configuration) {
-    struct TunnelRow {
-        std::string alias;
-        std::string mode;
-        std::string udp_destination;
-        std::string command;
-    };
-
-    std::vector<TunnelRow> rows;
+void printTunnelList(const std::vector<control::TunnelSummary>& rows) {
     std::size_t alias_width = std::string("Alias").size();
     std::size_t mode_width = std::string("Mode").size();
     std::size_t destination_width = std::string("UDP group / destination").size();
-    for (const NamedTunnel& tunnel : configuration.tunnels) {
-        TunnelRow row = {tunnel.alias, modeName(tunnel), udpDestination(tunnel), directCommand(tunnel)};
+    for (const control::TunnelSummary& row : rows) {
         alias_width = std::max(alias_width, row.alias.size());
         mode_width = std::max(mode_width, row.mode.size());
         destination_width = std::max(destination_width, row.udp_destination.size());
-        rows.push_back(std::move(row));
     }
 
     const int alias_padding = static_cast<int>(alias_width);
@@ -320,9 +288,9 @@ void printTunnelList(const TunnelConfiguration& configuration) {
            destination_padding, "UDP group / destination", "Equivalent direct command");
     printf("%-*s  %-*s  %-*s  %s\n", alias_padding, "-----", mode_padding, "----",
            destination_padding, "-----------------------", "-------------------------");
-    for (const TunnelRow& row : rows) {
+    for (const control::TunnelSummary& row : rows) {
         printf("%-*s  %-*s  %-*s  %s\n", alias_padding, row.alias.c_str(), mode_padding,
-               row.mode.c_str(), destination_padding, row.udp_destination.c_str(), row.command.c_str());
+               row.mode.c_str(), destination_padding, row.udp_destination.c_str(), row.equivalent_direct_command.c_str());
     }
 }
 
@@ -383,8 +351,8 @@ int runTunnelCommand(int argc, char* argv[]) {
         if (arguments.positional.size() != 1) {
             throw std::runtime_error("tunnel list does not accept an alias");
         }
-        const TunnelConfiguration configuration = loadConfiguration(arguments.config_path);
-        printTunnelList(configuration);
+        const control::ControlService control_service(arguments.config_path);
+        printTunnelList(control_service.listTunnels());
         return 0;
     }
 
@@ -392,13 +360,14 @@ int runTunnelCommand(int argc, char* argv[]) {
         if (arguments.positional.size() > 2) {
             throw std::runtime_error("tunnel validate accepts at most one alias");
         }
-        const TunnelConfiguration configuration = loadConfiguration(arguments.config_path);
+        const control::ControlService control_service(arguments.config_path);
         if (arguments.positional.size() == 2) {
-            const NamedTunnel& tunnel = findTunnel(configuration, arguments.positional[1]);
+            const NamedTunnel tunnel = control_service.tunnel(arguments.positional[1]);
             INFO("Tunnel '%s' is valid (%s)", tunnel.alias.c_str(), modeName(tunnel));
         } else {
-            INFO("Configuration is valid (%zu tunnel%s)", configuration.tunnels.size(),
-                 configuration.tunnels.size() == 1 ? "" : "s");
+            const std::vector<control::TunnelSummary> tunnels = control_service.listTunnels();
+            INFO("Configuration is valid (%zu tunnel%s)", tunnels.size(),
+                 tunnels.size() == 1 ? "" : "s");
         }
         return 0;
     }
@@ -406,8 +375,8 @@ int runTunnelCommand(int argc, char* argv[]) {
     if (arguments.positional.size() != 2) {
         throw std::runtime_error("tunnel " + subcommand + " requires exactly one alias");
     }
-    const TunnelConfiguration configuration = loadConfiguration(arguments.config_path);
-    const NamedTunnel& tunnel = findTunnel(configuration, arguments.positional[1]);
+    const control::ControlService control_service(arguments.config_path);
+    const NamedTunnel tunnel = control_service.tunnel(arguments.positional[1]);
     if (subcommand == "show") {
         printTunnel(tunnel);
         return 0;
@@ -425,8 +394,8 @@ int runTunnelCommand(int argc, char* argv[]) {
 
 int runProducerCommand(int argc, char* argv[]) {
     const ProducerCommand command = parseProducerCommand(argc, argv);
-    const TunnelConfiguration configuration = loadConfiguration(command.config_path);
-    const NamedTunnel& tunnel = findTunnel(configuration, command.alias);
+    const control::ControlService control_service(command.config_path);
+    const NamedTunnel tunnel = control_service.tunnel(command.alias);
     if (!tunnel.config.is_client_) {
         throw std::runtime_error("producer alias '" + tunnel.alias + "' must name a client tunnel");
     }

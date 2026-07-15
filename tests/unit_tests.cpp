@@ -1,13 +1,16 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
 #include "CommandLine.h"
 #include "Configuration.h"
 #include "Network.h"
 #include "Protocol.h"
+#include "control/ControlService.h"
 
 namespace {
 
@@ -143,6 +146,24 @@ unknown = "value"
     return expect(false, "unknown named-tunnel fields must be rejected");
 }
 
+bool testControlServiceCatalog() {
+    const std::filesystem::path configuration_path =
+        std::filesystem::path(__FILE__).parent_path() / "named_tunnels.toml";
+    const control::ControlService service(configuration_path);
+    const std::vector<control::TunnelSummary> tunnels = service.listTunnels();
+    if (!expect(tunnels.size() == 3, "control service must expose each named tunnel")) {
+        return false;
+    }
+
+    const NamedTunnel client = service.tunnel("example-client");
+    const NamedTunnel replica = service.tunnel("replica-server");
+    return expect(client.config.is_client_, "control service must return client configuration") &&
+           expect(replica.config.use_clt_grp_, "control service must preserve replicate-client configuration") &&
+           expect(tunnels[2].udp_destination == "replicate_client", "control service must describe replicated destinations") &&
+           expect(tunnels[0].equivalent_direct_command.find("dgramtunneler --client") == 0,
+                  "control service must expose a direct command equivalent");
+}
+
 } // namespace
 
 
@@ -153,7 +174,7 @@ int main() {
         return 1;
     }
     return testProtocolFraming() && testClientCommandLineParsing() && testCompactCommandLineParsing() && testNamedTunnelConfiguration() &&
-                   testInvalidNamedTunnelConfiguration()
+                   testInvalidNamedTunnelConfiguration() && testControlServiceCatalog()
                ? 0
                : 1;
 }
