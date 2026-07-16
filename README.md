@@ -9,6 +9,8 @@ DatagramTunneler tunnels UDP multicast datagrams over a TCP connection. A client
 
 It supports current Linux, macOS, and Windows 10/11 releases, direct command-line use, and reusable named tunnel definitions.
 
+![DatagramTunneler local control dashboard showing ingress and egress tunnel routes](doc/control-dashboard2.png)
+
 ## What it is for
 
 Use DatagramTunneler when a multicast-dependent application needs to cross a
