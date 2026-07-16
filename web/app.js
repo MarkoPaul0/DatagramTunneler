@@ -53,6 +53,44 @@
     return state.tunnels.find((tunnel) => tunnel.alias === alias);
   }
 
+  function configurationFor(alias) {
+    return state.configModel.find((tunnel) => tunnel.alias === alias);
+  }
+
+  function routeFor(tunnel) {
+    const configuration = configurationFor(tunnel.alias) || {};
+    if (tunnel.mode === 'client') {
+      return {
+        inputLabel: 'UDP IN',
+        inputValue: configuration.udp_group || tunnel.udp_destination || 'Not configured',
+        outputLabel: 'TCP OUT',
+        outputValue: configuration.tcp_server || 'Not configured',
+        interfaceValue: configuration.udp_interface || 'Not configured'
+      };
+    }
+    return {
+      inputLabel: 'TCP IN',
+      inputValue: configuration.tcp_listen_port ? `0.0.0.0:${configuration.tcp_listen_port}` : 'Not configured',
+      outputLabel: 'UDP OUT',
+      outputValue: configuration.udp_destination || tunnel.udp_destination || 'replicate_client',
+      interfaceValue: configuration.udp_interface || 'Not configured'
+    };
+  }
+
+  function renderTunnelFlow(tunnel, runtime) {
+    const route = routeFor(tunnel);
+    const isActive = ['running', 'connected'].includes(runtime.state);
+    const hasTraffic = isActive && Number(runtime.metrics?.datagram_count || 0) > 0;
+    const traffic = hasTraffic ? ' flowing' : '';
+    const stateLabel = hasTraffic ? 'recent datagrams observed' : 'waiting for datagrams';
+    return `<div class="route-flow${traffic}" aria-label="${escapeAttribute(`${route.inputLabel} ${route.inputValue}, through TCP tunnel, to ${route.outputLabel} ${route.outputValue}`)}">
+      <div class="route-endpoint route-input"><span>${route.inputLabel}</span><strong>${escapeHtml(route.inputValue)}</strong></div>
+      <div class="route-transit" aria-hidden="true"><i></i><i></i><i></i><span>TCP TUNNEL</span></div>
+      <div class="route-endpoint route-output"><span>${route.outputLabel}</span><strong>${escapeHtml(route.outputValue)}</strong></div>
+      <p class="route-interface"><span>INTERFACE</span><b>${escapeHtml(route.interfaceValue)}</b><small>${stateLabel}</small></p>
+    </div>`;
+  }
+
   function formatBytes(value) {
     if (!value) return '0 B';
     if (value < 1024) return `${value} B`;
@@ -81,9 +119,8 @@
       const selected = state.selectedAlias === tunnel.alias ? 'selected' : '';
       return `<article class="tunnel-card ${escapeHtml(runtime.state)} ${selected}" data-tunnel-card="${escapeAttribute(tunnel.alias)}" tabindex="0" aria-label="Inspect ${escapeHtml(tunnel.alias)}">
         <div class="tunnel-top"><span class="mode-pill ${role.className}">${role.name} <small>· ${role.detail}</small></span><span class="runtime-state ${escapeHtml(runtime.state)}">${escapeHtml(runtime.state)}</span></div>
-        <h3>${escapeHtml(tunnel.alias)}</h3>
-        <p class="destination">UDP DESTINATION<br><b>${escapeHtml(tunnel.udp_destination)}</b></p>
-        <p class="destination">${escapeHtml(runtime.detail || 'Not started')}</p>
+        <div class="tunnel-card-title"><h3>${escapeHtml(tunnel.alias)}</h3><p>${escapeHtml(runtime.detail || 'Not started')}</p></div>
+        ${renderTunnelFlow(tunnel, runtime)}
         <button class="inspect-button" data-inspect="${escapeAttribute(tunnel.alias)}" type="button">View stats &amp; events <span>→</span></button>
         <div class="action-row" aria-label="${escapeHtml(tunnel.alias)} controls">
           <button data-tunnel="${escapeAttribute(tunnel.alias)}" data-action="start" type="button">Start</button>
@@ -232,12 +269,29 @@
     return tunnels;
   }
 
+  function splitEndpoint(value, allowReplica = false) {
+    const endpoint = String(value || '').trim();
+    if (allowReplica && endpoint === 'replicate_client') return { address: endpoint, port: '' };
+    const match = endpoint.match(/^(.+):(\d+)$/);
+    return match ? { address: match[1], port: match[2] } : { address: endpoint, port: '' };
+  }
+
+  function joinEndpoint(address, port, allowReplica = false) {
+    const host = String(address || '').trim();
+    const service = String(port || '').trim();
+    if (allowReplica && host === 'replicate_client' && !service) return host;
+    return host && service ? `${host}:${service}` : host;
+  }
+
   function collectFormTunnels() {
     return [...document.querySelectorAll('[data-config-tunnel]')].map((card) => {
       const field = (name) => card.querySelector(`[data-config-field="${name}"]`)?.value.trim() || '';
       return {
-        alias: field('alias'), mode: field('mode'), udp_interface: field('udp_interface'), udp_group: field('udp_group'),
-        tcp_server: field('tcp_server'), tcp_listen_port: field('tcp_listen_port'), udp_destination: field('udp_destination')
+        alias: field('alias'), mode: field('mode'), udp_interface: field('udp_interface'),
+        udp_group: joinEndpoint(field('udp_group_address'), field('udp_group_port')),
+        tcp_server: joinEndpoint(field('tcp_server_address'), field('tcp_server_port')),
+        tcp_listen_port: field('tcp_listen_port'),
+        udp_destination: joinEndpoint(field('udp_destination_address'), field('udp_destination_port'), true)
       };
     });
   }
@@ -250,8 +304,13 @@
       aliases.add(tunnel.alias);
       if (!['client', 'server'].includes(tunnel.mode)) throw new Error(`Tunnel '${tunnel.alias}' must be a client or server.`);
       if (!tunnel.udp_interface) throw new Error(`Tunnel '${tunnel.alias}' requires a UDP interface.`);
-      if (tunnel.mode === 'client' && (!tunnel.udp_group || !tunnel.tcp_server)) throw new Error(`Client tunnel '${tunnel.alias}' requires a UDP group and TCP server.`);
+      if (tunnel.mode === 'client' && (!/^.+:\d+$/.test(tunnel.udp_group) || !/^.+:\d+$/.test(tunnel.tcp_server))) {
+        throw new Error(`Client tunnel '${tunnel.alias}' requires a UDP group address and port, plus a TCP server address and port.`);
+      }
       if (tunnel.mode === 'server' && !/^\d+$/.test(tunnel.tcp_listen_port)) throw new Error(`Server tunnel '${tunnel.alias}' requires a TCP listen port.`);
+      if (tunnel.mode === 'server' && tunnel.udp_destination && tunnel.udp_destination !== 'replicate_client' && !/^.+:\d+$/.test(tunnel.udp_destination)) {
+        throw new Error(`Server tunnel '${tunnel.alias}' requires a UDP destination address and port, or replicate_client.`);
+      }
     }
   }
 
@@ -271,11 +330,23 @@
   }
 
   function tunnelEditor(tunnel, index) {
+    const multicastGroup = splitEndpoint(tunnel.udp_group);
+    const tcpServer = splitEndpoint(tunnel.tcp_server);
+    const udpDestination = splitEndpoint(tunnel.udp_destination, true);
     const modeFields = tunnel.mode === 'server'
       ? `<label>TCP listen port<input data-config-field="tcp_listen_port" type="number" min="1" max="65535" value="${escapeAttribute(tunnel.tcp_listen_port)}" required></label>
-         <label>UDP destination <input data-config-field="udp_destination" value="${escapeAttribute(tunnel.udp_destination)}" placeholder="239.1.2.4:5000 or replicate_client"></label>`
-      : `<label>UDP multicast group<input data-config-field="udp_group" value="${escapeAttribute(tunnel.udp_group)}" placeholder="239.1.2.3:5000" required></label>
-         <label>TCP server<input data-config-field="tcp_server" value="${escapeAttribute(tunnel.tcp_server)}" placeholder="192.168.1.10:14052" required></label>`;
+         <div class="field-row">
+           <label>UDP destination address<input data-config-field="udp_destination_address" value="${escapeAttribute(udpDestination.address)}" placeholder="239.1.2.4 or replicate_client"></label>
+           <label>UDP port<input data-config-field="udp_destination_port" type="number" min="1" max="65535" value="${escapeAttribute(udpDestination.port)}" placeholder="5000"></label>
+         </div>`
+      : `<div class="field-row">
+           <label>UDP multicast address<input data-config-field="udp_group_address" value="${escapeAttribute(multicastGroup.address)}" placeholder="239.1.2.3" required></label>
+           <label>UDP port<input data-config-field="udp_group_port" type="number" min="1" max="65535" value="${escapeAttribute(multicastGroup.port)}" placeholder="5000" required></label>
+         </div>
+         <div class="field-row">
+           <label>TCP server address<input data-config-field="tcp_server_address" value="${escapeAttribute(tcpServer.address)}" placeholder="192.168.1.10" required></label>
+           <label>TCP port<input data-config-field="tcp_server_port" type="number" min="1" max="65535" value="${escapeAttribute(tcpServer.port)}" placeholder="14052" required></label>
+         </div>`;
     return `<article class="tunnel-editor" data-config-tunnel="${index}">
       <div class="tunnel-editor-heading"><span class="panel-number">${tunnel.mode === 'server' ? 'EGRESS' : 'INGRESS'}</span><button class="text-button delete-tunnel" data-delete-tunnel="${index}" type="button">Delete</button></div>
       <div class="editor-fields editor-fields-top">
@@ -328,11 +399,12 @@
 
   async function refresh() {
     try {
-      const [tunnelResponse, runtimeResponse] = await Promise.all([
-        request('/tunnels'), request('/runtimes')
+      const [tunnelResponse, runtimeResponse, configurationResponse] = await Promise.all([
+        request('/tunnels'), request('/runtimes'), request('/config')
       ]);
       state.tunnels = tunnelResponse.tunnels || [];
       state.runtimes = new Map((runtimeResponse.runtimes || []).map((runtime) => [`${runtime.kind}:${runtime.alias}`, runtime]));
+      if (!state.configDirty) state.configModel = parseTomlConfiguration(configurationResponse.toml || '');
       renderTunnels(); renderProducerAliases(); renderTunnelDetail();
     } catch (error) { notify(error.message, true); }
   }
