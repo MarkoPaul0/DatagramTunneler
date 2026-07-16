@@ -7,7 +7,13 @@
 
 DatagramTunneler tunnels UDP multicast datagrams over a TCP connection. A client joins a multicast group, forwards received datagrams to a server, and the server republishes them on its own subnet.
 
-It supports current Linux, macOS, and Windows 10/11 releases, direct command-line use, and reusable named tunnel definitions.
+Use it either from the command line or through the local browser dashboard. It supports current Linux, macOS, and Windows 10/11 releases, plus reusable named tunnel definitions.
+
+### CLI
+
+![DatagramTunneler command-line demo](doc/dgram-cli.gif)
+
+### Local dashboard
 
 ![DatagramTunneler local control dashboard showing ingress and egress tunnel routes](doc/control-dashboard2.png)
 
