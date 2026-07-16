@@ -51,8 +51,8 @@ bool parseCommandLineConfig(int argc, char* argv[], DatagramTunneler::Config* co
             INFO("Mode:                        client");
             cfg->is_client_ = true;
             side_selected = true;
-        } else if (option == "--compact") {
-            cfg->compact_output_ = true;
+        } else if (option == "--verbose") {
+            cfg->verbose_output_ = true;
         } else {
             if (!side_selected) {
                 DEATH("First argument needs to select server or client mode! (--server or --client)");

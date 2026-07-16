@@ -39,14 +39,14 @@ static void printUsage(const char* binary_name) {
     printf("    %s tunnel list [--config <path>]\n", binary_name);
     printf("    %s tunnel show <alias> [--config <path>]\n", binary_name);
     printf("    %s tunnel validate [alias] [--config <path>]\n", binary_name);
-    printf("    %s tunnel run <alias> [--compact] [--config <path>]\n", binary_name);
-    printf("    %s producer <client-alias> [--compact] [--config <path>] [--interval-ms <ms>] [--count <n>] [--payload-prefix <text>]\n", binary_name);
+    printf("    %s tunnel run <alias> [--verbose] [--config <path>]\n", binary_name);
+    printf("    %s producer <client-alias> [--verbose] [--config <path>] [--interval-ms <ms>] [--count <n>] [--payload-prefix <text>]\n", binary_name);
     printf("    %s control serve [--config <path>] [--port <port>]\n", binary_name);
     printf("\nDirect invocation:\n");
     printf("Server mode:\n");
-    printf("    %s --server -i <udp_interface> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>] [--compact]\n", binary_name);
+    printf("    %s --server -i <udp_interface> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>] [--verbose]\n", binary_name);
     printf("Client mode:\n");
-    printf("    %s --client -i <udp_interface> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port> [--compact]\n", binary_name);
+    printf("    %s --client -i <udp_interface> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port> [--verbose]\n", binary_name);
 }
 
 
@@ -59,10 +59,10 @@ namespace {
 struct CommandArguments {
     std::filesystem::path config_path;
     std::vector<std::string> positional;
-    bool compact_output = false;
+    bool verbose_output = false;
 };
 
-CommandArguments parseCommandArguments(int argc, char* argv[], int start_index, bool allow_compact = false) {
+CommandArguments parseCommandArguments(int argc, char* argv[], int start_index, bool allow_verbose = false) {
     CommandArguments arguments;
     for (int index = start_index; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -71,11 +71,11 @@ CommandArguments parseCommandArguments(int argc, char* argv[], int start_index, 
                 throw std::runtime_error("--config requires a file path");
             }
             arguments.config_path = argv[++index];
-        } else if (argument == "--compact") {
-            if (!allow_compact) {
-                throw std::runtime_error("--compact is only supported by tunnel run");
+        } else if (argument == "--verbose") {
+            if (!allow_verbose) {
+                throw std::runtime_error("--verbose is only supported by tunnel run");
             }
-            arguments.compact_output = true;
+            arguments.verbose_output = true;
         } else {
             arguments.positional.push_back(argument);
         }
@@ -104,7 +104,7 @@ struct ProducerCommand {
     std::filesystem::path config_path;
     std::string alias;
     DatagramProducer::Options options;
-    bool compact_output = false;
+    bool verbose_output = false;
 };
 
 struct ControlCommand {
@@ -144,8 +144,8 @@ ProducerCommand parseProducerCommand(int argc, char* argv[]) {
                 throw std::runtime_error("--config requires a file path");
             }
             command.config_path = argv[++index];
-        } else if (argument == "--compact") {
-            command.compact_output = true;
+        } else if (argument == "--verbose") {
+            command.verbose_output = true;
         } else if (argument == "--interval-ms") {
             if (index + 1 >= argc) {
                 throw std::runtime_error("--interval-ms requires a value");
@@ -375,8 +375,8 @@ int runTunnelCommand(int argc, char* argv[]) {
     }
 
     const std::string& subcommand = arguments.positional.front();
-    if (arguments.compact_output && subcommand != "run") {
-        throw std::runtime_error("--compact is only supported by tunnel run");
+    if (arguments.verbose_output && subcommand != "run") {
+        throw std::runtime_error("--verbose is only supported by tunnel run");
     }
     if (subcommand == "list") {
         if (arguments.positional.size() != 1) {
@@ -414,8 +414,9 @@ int runTunnelCommand(int argc, char* argv[]) {
     }
     if (subcommand == "run") {
         DatagramTunneler::Config config = tunnel.config;
-        config.compact_output_ = arguments.compact_output;
-        configureCompactOutput(config.compact_output_, compactTunnelContext(config));
+        config.verbose_output_ = arguments.verbose_output;
+        configureVerboseOutput(config.verbose_output_);
+        configureCompactOutput(!config.verbose_output_, compactTunnelContext(config));
         DatagramTunneler tunneler(std::move(config));
         tunneler.run();
         return 0;
@@ -430,7 +431,8 @@ int runProducerCommand(int argc, char* argv[]) {
     if (!tunnel.config.is_client_) {
         throw std::runtime_error("producer alias '" + tunnel.alias + "' must name a client tunnel");
     }
-    configureCompactOutput(command.compact_output, compactProducerContext(tunnel.config, command.options));
+    configureVerboseOutput(command.verbose_output);
+    configureCompactOutput(!command.verbose_output, compactProducerContext(tunnel.config, command.options));
     DatagramProducer producer(tunnel.config, command.options);
     producer.run();
     return 0;
@@ -481,19 +483,23 @@ int main(int argc, char* argv[]) {
 
     // Parse command line config
     DatagramTunneler::Config cfg;
+    bool verbose_output = false;
     for (int index = 1; index < argc; ++index) {
-        if (std::string(argv[index]) == "--compact") {
-            configureCompactOutput(true);
+        if (std::string(argv[index]) == "--verbose") {
+            verbose_output = true;
             break;
         }
     }
+    configureVerboseOutput(verbose_output);
+    configureCompactOutput(!verbose_output);
     if (!parseCommandLineConfig(argc, argv, &cfg)) {
         printUsage(argv[0]);
         return 1;
     }
 
     // Create and run the datagram tunneler with the parsed config
-    configureCompactOutput(cfg.compact_output_, compactTunnelContext(cfg));
+    configureVerboseOutput(cfg.verbose_output_);
+    configureCompactOutput(!cfg.verbose_output_, compactTunnelContext(cfg));
     try {
         DatagramTunneler tunneler(std::move(cfg));
         tunneler.run();

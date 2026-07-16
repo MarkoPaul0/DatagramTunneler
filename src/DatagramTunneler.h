@@ -40,8 +40,8 @@ public:
         // Server specific
         bool            use_clt_grp_ = false; // If true, the server will publish multicast data on the same group the client is listening
 
-        // Display compact live statistics and recent events when stdout is an interactive terminal.
-        bool            compact_output_ = false;
+        // Show conventional line-oriented diagnostic output instead of the default compact terminal view.
+        bool            verbose_output_ = false;
 
         // Returns true if the config is complete, false otherwise.
         // Note that being complete doesn't mean being valid.

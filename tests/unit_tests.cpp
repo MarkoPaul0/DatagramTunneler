@@ -72,7 +72,7 @@ bool testClientCommandLineParsing() {
            expect(config.udp_dst_port_ == 5000, "multicast port must be parsed");
 }
 
-bool testCompactCommandLineParsing() {
+bool testVerboseCommandLineParsing() {
     char binary[] = "dgramtunneler";
     char client[] = "--client";
     char udp_interface[] = "-i";
@@ -81,13 +81,13 @@ bool testCompactCommandLineParsing() {
     char tcp_address[] = "127.0.0.1:14052";
     char udp_group[] = "-u";
     char multicast_address[] = "239.1.2.3:5000";
-    char compact[] = "--compact";
+    char verbose[] = "--verbose";
     char* argv[] = {binary, client, udp_interface, interface_address, tcp_server, tcp_address,
-                    udp_group, multicast_address, compact, nullptr};
+                    udp_group, multicast_address, verbose, nullptr};
 
     DatagramTunneler::Config config;
-    return expect(parseCommandLineConfig(9, argv, &config), "compact client command line must parse") &&
-           expect(config.compact_output_, "--compact must enable compact output");
+    return expect(parseCommandLineConfig(9, argv, &config), "verbose client command line must parse") &&
+           expect(config.verbose_output_, "--verbose must enable verbose output");
 }
 
 bool testNamedTunnelConfiguration() {
@@ -272,7 +272,7 @@ int main() {
         std::fprintf(stderr, "Test failure: network initialization failed (%d)\n", network_error);
         return 1;
     }
-    const bool passed = testProtocolFraming() && testClientCommandLineParsing() && testCompactCommandLineParsing() &&
+    const bool passed = testProtocolFraming() && testClientCommandLineParsing() && testVerboseCommandLineParsing() &&
                         testNamedTunnelConfiguration() && testInvalidNamedTunnelConfiguration() && testControlServiceCatalog() &&
                         testControlServiceConfigurationUpdate() && testControlApiContract();
 #if !defined(_WIN32)

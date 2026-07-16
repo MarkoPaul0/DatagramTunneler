@@ -166,7 +166,7 @@ if(BUILD_TESTING)
         PASS_REGULAR_EXPRESSION "udp_destination = replicate_client")
 
     add_test(NAME producer_command
-        COMMAND dgramtunneler producer example-client --compact --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml" --count 2 --interval-ms 1)
+        COMMAND dgramtunneler producer example-client --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml" --count 2 --interval-ms 1)
     set_tests_properties(producer_command PROPERTIES
         PASS_REGULAR_EXPRESSION "Sent Dummy datagram #2")
 

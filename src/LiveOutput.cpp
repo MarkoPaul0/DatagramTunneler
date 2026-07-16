@@ -13,6 +13,7 @@
 #include <io.h>
 #include <windows.h>
 #else
+#include <sys/ioctl.h>
 #include <unistd.h>
 #endif
 
@@ -50,8 +51,44 @@ bool enableAnsiTerminal() {
 #endif
 }
 
+std::size_t terminalColumns() {
+#ifdef _WIN32
+    CONSOLE_SCREEN_BUFFER_INFO info {};
+    const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (output != INVALID_HANDLE_VALUE && GetConsoleScreenBufferInfo(output, &info) != 0) {
+        return static_cast<std::size_t>(info.srWindow.Right - info.srWindow.Left + 1);
+    }
+#else
+    winsize size {};
+    if (ioctl(fileno(stdout), TIOCGWINSZ, &size) == 0 && size.ws_col != 0) {
+        return size.ws_col;
+    }
+#endif
+    return 80;
+}
+
+std::string fitTerminalLine(std::string_view line, std::size_t columns) {
+    // Keep one spare column: some terminals wrap immediately after the final column.
+    const std::size_t maximum = columns > 1 ? columns - 1 : 1;
+    if (line.size() <= maximum) {
+        return std::string(line);
+    }
+    if (maximum <= 3) {
+        return std::string(line.substr(0, maximum));
+    }
+    return std::string(line.substr(0, maximum - 3)) + "...";
+}
+
 class CompactOutput {
 public:
+    void configureVerbose(bool requested) {
+        verbose_ = requested;
+    }
+
+    bool verbose() const {
+        return verbose_;
+    }
+
     void configure(bool requested, std::string_view context) {
         if (!requested) {
             return;
@@ -130,7 +167,7 @@ private:
         }
         render();
     }
-    std::string statisticsLine() const {
+    std::string statisticsLine(std::size_t columns) const {
         const auto elapsed = std::chrono::steady_clock::now() - started_at_;
         const double elapsed_seconds = std::chrono::duration<double>(elapsed).count();
         const double average_size = datagram_count_ == 0 ? 0.0 :
@@ -142,6 +179,12 @@ private:
         if (latency_samples_.empty()) {
             std::snprintf(buffer, sizeof(buffer),
                           "%s | %zu pkts | %.1f B avg | %.1f B/s | latency: unavailable",
+                          prefix, datagram_count_, average_size, throughput);
+            const std::string full_line(buffer);
+            if (full_line.size() < columns) {
+                return full_line;
+            }
+            std::snprintf(buffer, sizeof(buffer), "%s | %zu pkts | %.1f B | %.1f B/s | lat: n/a",
                           prefix, datagram_count_, average_size, throughput);
             return buffer;
         }
@@ -160,19 +203,28 @@ private:
                       "%s | %zu pkts | %.1f B avg | %.1f B/s | lat ms: %.2f avg / %.2f p50 / %.2f p99 / %.2f max",
                       prefix, datagram_count_, average_size, throughput, latency_sum / static_cast<double>(latency.size()),
                       percentile(0.50), percentile(0.99), latency.back());
+        const std::string full_line(buffer);
+        if (full_line.size() < columns) {
+            return full_line;
+        }
+        std::snprintf(buffer, sizeof(buffer),
+                      "%s | %zu pkts | %.1f B | %.1f B/s | latencies avg/p50/p99/max %.2f/%.2f/%.2f/%.2f ms",
+                      prefix, datagram_count_, average_size, throughput,
+                      latency_sum / static_cast<double>(latency.size()), percentile(0.50), percentile(0.99), latency.back());
         return buffer;
     }
 
     void render() const {
+        const std::size_t columns = terminalColumns();
         std::fputs("\033[6A\r\033[2K", stdout);
-        std::fputs(statisticsLine().c_str(), stdout);
+        std::fputs(fitTerminalLine(statisticsLine(columns), columns).c_str(), stdout);
         std::fputc('\n', stdout);
         const std::size_t first_event = event_count_ == kEventLines ? next_event_ : 0;
         for (std::size_t index = 0; index < kEventLines; ++index) {
             std::fputs("\r\033[2K", stdout);
             if (index < event_count_) {
                 const std::size_t event_index = (first_event + index) % kEventLines;
-                std::fputs(events_[event_index].c_str(), stdout);
+                std::fputs(fitTerminalLine(events_[event_index], columns).c_str(), stdout);
             }
             std::fputc('\n', stdout);
         }
@@ -180,6 +232,7 @@ private:
     }
 
     bool enabled_ = false;
+    bool verbose_ = false;
     std::string context_;
     std::array<std::string, kEventLines> events_ {};
     std::size_t next_event_ = 0;
@@ -204,6 +257,14 @@ void configureCompactOutput(bool requested, std::string_view context) {
 
 bool compactOutputEnabled() {
     return output().enabled();
+}
+
+void configureVerboseOutput(bool requested) {
+    output().configureVerbose(requested);
+}
+
+bool verboseOutputEnabled() {
+    return output().verbose();
 }
 
 void logMessage(LogLevel level, const char* format, ...) {

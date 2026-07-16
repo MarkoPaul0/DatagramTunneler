@@ -239,10 +239,8 @@ void DatagramTunneler::runClient(std::stop_token stop_token) {
                 throwTunnelError("Unable to read data from UDP socket %d", error_code);
             }
             tunnel_pkt.type_ = TunnelPacketType::Heartbeat;
-            if (compactOutputEnabled()) {
-                logCompactMessage(LogLevel::Info, "heartbeat -> TCP");
-            } else {
-                INFO("Sending a heartbeat to server.");
+            if (verboseOutputEnabled()) {
+                INFO("Heartbeat sent to TCP server.");
             }
         } else {
             assert(len_read <= static_cast<SocketIoSize>(kMaxDatagramLength));
@@ -464,10 +462,8 @@ void DatagramTunneler::runServer(std::stop_token stop_token) {
         if (tunnel_pkt.type_ == TunnelPacketType::Heartbeat) {
             p = reinterpret_cast<char*>(&tunnel_pkt);
             len_to_read = kTunnelPacketPreambleLength;
-            if (compactOutputEnabled()) {
-                logCompactMessage(LogLevel::Info, "heartbeat <- client");
-            } else {
-                INFO("Received heartbeat from client.");
+            if (verboseOutputEnabled()) {
+                INFO("Heartbeat received from TCP client.");
             }
             latency_statistics.reportIfDue();
             continue;

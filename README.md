@@ -197,26 +197,23 @@ above, then use the [OpenAPI definition](docs/openapi.yaml) to generate a
 client or import it into an API tool. The [control API reference](docs/control-api.md)
 covers the event stream, error format, and compatibility policy.
 
-### Compact live output
+### Live terminal output
 
-For a running tunnel, add `--compact` to keep one live statistics line and the
-five most recent events in the terminal:
-
-```sh
-dgramtunneler tunnel run office-client --compact
-```
-
-The built-in producer supports the same display:
+On an interactive terminal, tunnels and the built-in producer use the compact
+live display by default: one statistics line and the five most recent events.
+Use `--verbose` for conventional line-by-line diagnostics, including heartbeat
+messages:
 
 ```sh
-dgramtunneler producer office-client --compact
+dgramtunneler tunnel run office-client --verbose
+dgramtunneler producer office-client --verbose
 ```
 
 The statistics show forwarded datagram count, average datagram size, and
 average throughput since the tunnel started. On a v2 server, they also show a
 rolling latency average, p50, p99, and maximum for the most recent 1,024
-datagrams. Compact mode activates only on an interactive terminal; when output
-is redirected, normal line-oriented logs are kept so they remain easy to
+datagrams. The compact display activates only on an interactive terminal; when
+output is redirected, normal line-oriented logs are kept so they remain easy to
 capture and process. Its statistics line identifies the active client, server,
 or producer route; event lines use short actions such as `forwarded`,
 `published`, and `sent` rather than repeating the route for every datagram.
