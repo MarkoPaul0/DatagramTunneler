@@ -1,5 +1,6 @@
 # ignore object files
 *.o
+*.DS_Store
 
 # ignore bin folder
 bin/*

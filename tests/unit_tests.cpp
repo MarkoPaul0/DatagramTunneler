@@ -1,13 +1,22 @@
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
+#include <vector>
 
 #include "CommandLine.h"
 #include "Configuration.h"
 #include "Network.h"
 #include "Protocol.h"
+#include "control/ControlService.h"
+#include "control/ControlApi.h"
+#include "control/ManagedTunnelRuntime.h"
 
 namespace {
 
@@ -63,7 +72,7 @@ bool testClientCommandLineParsing() {
            expect(config.udp_dst_port_ == 5000, "multicast port must be parsed");
 }
 
-bool testCompactCommandLineParsing() {
+bool testVerboseCommandLineParsing() {
     char binary[] = "dgramtunneler";
     char client[] = "--client";
     char udp_interface[] = "-i";
@@ -72,13 +81,13 @@ bool testCompactCommandLineParsing() {
     char tcp_address[] = "127.0.0.1:14052";
     char udp_group[] = "-u";
     char multicast_address[] = "239.1.2.3:5000";
-    char compact[] = "--compact";
+    char verbose[] = "--verbose";
     char* argv[] = {binary, client, udp_interface, interface_address, tcp_server, tcp_address,
-                    udp_group, multicast_address, compact, nullptr};
+                    udp_group, multicast_address, verbose, nullptr};
 
     DatagramTunneler::Config config;
-    return expect(parseCommandLineConfig(9, argv, &config), "compact client command line must parse") &&
-           expect(config.compact_output_, "--compact must enable compact output");
+    return expect(parseCommandLineConfig(9, argv, &config), "verbose client command line must parse") &&
+           expect(config.verbose_output_, "--verbose must enable verbose output");
 }
 
 bool testNamedTunnelConfiguration() {
@@ -143,6 +152,117 @@ unknown = "value"
     return expect(false, "unknown named-tunnel fields must be rejected");
 }
 
+bool testControlServiceCatalog() {
+    const std::filesystem::path configuration_path =
+        std::filesystem::path(__FILE__).parent_path() / "named_tunnels.toml";
+    const control::ControlService service(configuration_path);
+    const std::vector<control::TunnelSummary> tunnels = service.listTunnels();
+    if (!expect(tunnels.size() == 3, "control service must expose each named tunnel")) {
+        return false;
+    }
+
+    const NamedTunnel client = service.tunnel("example-client");
+    const NamedTunnel replica = service.tunnel("replica-server");
+    return expect(client.config.is_client_, "control service must return client configuration") &&
+           expect(replica.config.use_clt_grp_, "control service must preserve replicate-client configuration") &&
+           expect(tunnels[2].udp_destination == "replicate_client", "control service must describe replicated destinations") &&
+           expect(tunnels[0].equivalent_direct_command.find("dgramtunneler --client") == 0,
+                  "control service must expose a direct command equivalent");
+}
+
+bool testControlServiceConfigurationUpdate() {
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "dgramtunneler-control-service-test.toml";
+    {
+        std::ofstream output(path);
+        output << "version = 1\n\n[tunnels.before]\nmode = \"client\"\nudp_interface = \"127.0.0.1\"\nudp_group = \"239.1.2.3:5000\"\ntcp_server = \"127.0.0.1:14052\"\n";
+    }
+    try {
+        control::ControlService service(path);
+        service.replaceConfiguration("version = 1\n\n[tunnels.after]\nmode = \"server\"\nudp_interface = \"127.0.0.1\"\ntcp_listen_port = 14052\nudp_destination = \"239.1.2.4:5000\"\n");
+        const bool passed = expect(service.tunnel("after").config.tcp_srv_port_ == 14052,
+                                  "control service must use a validated configuration replacement") &&
+                            expect(service.configurationToml().find("[tunnels.after]") != std::string::npos,
+                                   "control service must persist a configuration replacement");
+        std::filesystem::remove(path);
+        return passed;
+    } catch (...) {
+        std::filesystem::remove(path);
+        throw;
+    }
+}
+
+#if !defined(_WIN32)
+class RecordingEventSink final : public control::EventSink {
+public:
+    void publish(const control::ControlEvent& event) override {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        events_.push_back(event);
+    }
+
+    std::size_t size() const {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        return events_.size();
+    }
+
+private:
+    mutable std::mutex mutex_;
+    std::vector<control::ControlEvent> events_;
+};
+
+bool testManagedProducerRuntime() {
+    const std::filesystem::path configuration_path =
+        std::filesystem::path(__FILE__).parent_path() / "named_tunnels.toml";
+    const control::ControlService service(configuration_path);
+    RecordingEventSink event_sink;
+    control::ManagedTunnelRuntime runtime(service, &event_sink);
+    DatagramProducer::Options options;
+    options.count = 1;
+    options.interval_ms = 1;
+    runtime.startProducer("example-client", options);
+
+    // Creating and sending on a multicast socket can take noticeably longer on
+    // Windows runners than on Unix hosts. Use a real deadline instead of a
+    // one-second polling budget so this remains a lifecycle test rather than a
+    // scheduler-speed test.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    control::TunnelSnapshot latest_snapshot;
+    while (std::chrono::steady_clock::now() < deadline) {
+        const std::vector<control::TunnelSnapshot> snapshots = runtime.snapshots();
+        if (snapshots.size() == 1) {
+            latest_snapshot = snapshots.front();
+        }
+        if (latest_snapshot.state == control::TunnelState::Stopped) {
+            return expect(latest_snapshot.kind == control::RuntimeKind::Producer,
+                          "managed producer must be identified as a producer") &&
+                   expect(event_sink.size() >= 3, "managed producer must publish lifecycle events");
+        }
+        if (latest_snapshot.state == control::TunnelState::Failed) {
+            std::fprintf(stderr, "Test failure: managed producer failed: %s\n", latest_snapshot.detail.c_str());
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (!latest_snapshot.detail.empty()) {
+        std::fprintf(stderr, "Test failure: managed producer did not stop within five seconds (last state: %d, detail: %s)\n",
+                     static_cast<int>(latest_snapshot.state), latest_snapshot.detail.c_str());
+        return false;
+    }
+    return expect(false, "managed producer must reach a stopped state");
+}
+#endif
+
+bool testControlApiContract() {
+    const control::api::ProducerStartRequest defaults;
+    return expect(control::api::kVersion == "v1", "control API must expose its version") &&
+           expect(control::api::tunnelActionPath("example-client", "start") == "/api/v1/tunnels/example-client/start",
+                  "control API must define tunnel lifecycle paths") &&
+           expect(control::api::producerActionPath("example-client", "start") ==
+                      "/api/v1/tunnels/example-client/producer/start",
+                  "control API must define producer lifecycle paths") &&
+           expect(defaults.interval_milliseconds == 1000 && !defaults.count.has_value(),
+                  "control API producer defaults must be safe");
+}
+
 } // namespace
 
 
@@ -152,8 +272,12 @@ int main() {
         std::fprintf(stderr, "Test failure: network initialization failed (%d)\n", network_error);
         return 1;
     }
-    return testProtocolFraming() && testClientCommandLineParsing() && testCompactCommandLineParsing() && testNamedTunnelConfiguration() &&
-                   testInvalidNamedTunnelConfiguration()
-               ? 0
-               : 1;
+    const bool passed = testProtocolFraming() && testClientCommandLineParsing() && testVerboseCommandLineParsing() &&
+                        testNamedTunnelConfiguration() && testInvalidNamedTunnelConfiguration() && testControlServiceCatalog() &&
+                        testControlServiceConfigurationUpdate() && testControlApiContract();
+#if !defined(_WIN32)
+    return passed && testManagedProducerRuntime() ? 0 : 1;
+#else
+    return passed ? 0 : 1;
+#endif
 }

@@ -38,7 +38,7 @@ DatagramProducer::DatagramProducer(const DatagramTunneler::Config& config, Optio
 }
 
 
-void DatagramProducer::run() {
+void DatagramProducer::run(std::stop_token stop_token) {
     Socket udp_socket = createDatagramSocket();
 
     in_addr interface_address {};
@@ -70,7 +70,9 @@ void DatagramProducer::run() {
              options_.count == 0 ? " until interrupted" : "");
     }
 
-    for (std::size_t number = 1; options_.count == 0 || number <= options_.count; ++number) {
+    for (std::size_t number = 1;
+         !stop_token.stop_requested() && (options_.count == 0 || number <= options_.count);
+         ++number) {
         const std::string payload = options_.payload_prefix + " #" + std::to_string(number);
         if (payload.size() > kMaxDatagramLength ||
             payload.size() > static_cast<std::size_t>(std::numeric_limits<SocketBufferLength>::max())) {
@@ -90,7 +92,7 @@ void DatagramProducer::run() {
         } else {
             INFO("Sent %s", payload.c_str());
         }
-        if (options_.count == 0 || number < options_.count) {
+        if (!stop_token.stop_requested() && (options_.count == 0 || number < options_.count)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(options_.interval_ms));
         }
     }

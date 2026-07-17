@@ -12,6 +12,8 @@ enum class LogLevel {
 
 void configureCompactOutput(bool requested, std::string_view context = {});
 bool compactOutputEnabled();
+void configureVerboseOutput(bool requested);
+bool verboseOutputEnabled();
 void logMessage(LogLevel level, const char* format, ...);
 void logCompactMessage(LogLevel level, const char* format, ...);
 void recordDatagram(std::size_t bytes);

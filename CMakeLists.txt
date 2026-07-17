@@ -13,6 +13,44 @@ project(DatagramTunneler
     DESCRIPTION "Forward UDP multicast datagrams through a TCP tunnel"
     LANGUAGES CXX)
 
+set(DGRAMTUNNELER_WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/web")
+set(DGRAMTUNNELER_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(DGRAMTUNNELER_WEB_ASSETS_HEADER "${DGRAMTUNNELER_GENERATED_INCLUDE_DIR}/control/WebAssets.h")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${DGRAMTUNNELER_WEB_DIR}/index.html"
+    "${DGRAMTUNNELER_WEB_DIR}/styles.css"
+    "${DGRAMTUNNELER_WEB_DIR}/app.js")
+file(READ "${DGRAMTUNNELER_WEB_DIR}/index.html" DGRAMTUNNELER_WEB_INDEX)
+file(READ "${DGRAMTUNNELER_WEB_DIR}/styles.css" DGRAMTUNNELER_WEB_STYLES)
+file(READ "${DGRAMTUNNELER_WEB_DIR}/app.js" DGRAMTUNNELER_WEB_SCRIPT)
+
+# MSVC limits the size of an individual source string literal. Keep the
+# control UI embedded in the executable, but emit each asset as adjacent raw
+# string literals that are safely below that limit.
+function(dgramtunneler_embed_web_asset output content)
+    set(result "")
+    string(LENGTH "${content}" content_length)
+    set(offset 0)
+    while(offset LESS content_length)
+        math(EXPR remaining "${content_length} - ${offset}")
+        if(remaining GREATER 8192)
+            set(chunk_length 8192)
+        else()
+            set(chunk_length ${remaining})
+        endif()
+        string(SUBSTRING "${content}" ${offset} ${chunk_length} chunk)
+        string(APPEND result "R\"DGRAM(${chunk})DGRAM\"\n")
+        math(EXPR offset "${offset} + ${chunk_length}")
+    endwhile()
+    set(${output} "${result}" PARENT_SCOPE)
+endfunction()
+
+dgramtunneler_embed_web_asset(DGRAMTUNNELER_WEB_INDEX_LITERAL "${DGRAMTUNNELER_WEB_INDEX}")
+dgramtunneler_embed_web_asset(DGRAMTUNNELER_WEB_STYLES_LITERAL "${DGRAMTUNNELER_WEB_STYLES}")
+dgramtunneler_embed_web_asset(DGRAMTUNNELER_WEB_SCRIPT_LITERAL "${DGRAMTUNNELER_WEB_SCRIPT}")
+file(MAKE_DIRECTORY "${DGRAMTUNNELER_GENERATED_INCLUDE_DIR}/control")
+file(WRITE "${DGRAMTUNNELER_WEB_ASSETS_HEADER}" "#pragma once\n\n#include <string_view>\n\nnamespace control::web_assets {\ninline constexpr std::string_view kIndexHtml =\n${DGRAMTUNNELER_WEB_INDEX_LITERAL};\ninline constexpr std::string_view kStylesCss =\n${DGRAMTUNNELER_WEB_STYLES_LITERAL};\ninline constexpr std::string_view kAppJs =\n${DGRAMTUNNELER_WEB_SCRIPT_LITERAL};\n} // namespace control::web_assets\n")
+
 include(GNUInstallDirs)
 
 add_executable(dgramtunneler
@@ -22,9 +60,13 @@ add_executable(dgramtunneler
     src/Network.cpp
     src/LiveOutput.cpp
     src/Producer.cpp
-    src/DatagramTunneler.cpp)
+    src/DatagramTunneler.cpp
+    src/control/ControlService.cpp
+    src/control/LocalControlServer.cpp
+    src/control/ManagedTunnelRuntime.cpp)
 
 target_compile_features(dgramtunneler PRIVATE cxx_std_20)
+target_include_directories(dgramtunneler PRIVATE src "${DGRAMTUNNELER_GENERATED_INCLUDE_DIR}")
 target_compile_definitions(dgramtunneler PRIVATE
     DGRAMTUNNELER_VERSION="${PROJECT_VERSION}")
 set_target_properties(dgramtunneler PROPERTIES
@@ -41,7 +83,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
 endif()
 
 if(WIN32)
-    target_link_libraries(dgramtunneler PRIVATE ws2_32)
+    target_link_libraries(dgramtunneler PRIVATE ws2_32 iphlpapi)
 endif()
 
 install(TARGETS dgramtunneler
@@ -79,11 +121,15 @@ if(BUILD_TESTING)
         src/Configuration.cpp
         src/Network.cpp
         src/LiveOutput.cpp
-        src/DatagramTunneler.cpp)
+        src/DatagramTunneler.cpp
+        src/control/ControlService.cpp
+        src/control/LocalControlServer.cpp
+        src/control/ManagedTunnelRuntime.cpp
+        src/Producer.cpp)
     target_compile_features(dgramtunneler_unit_tests PRIVATE cxx_std_20)
     set_target_properties(dgramtunneler_unit_tests PROPERTIES
         CXX_EXTENSIONS OFF)
-    target_include_directories(dgramtunneler_unit_tests PRIVATE src)
+    target_include_directories(dgramtunneler_unit_tests PRIVATE src "${DGRAMTUNNELER_GENERATED_INCLUDE_DIR}")
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
         target_compile_options(dgramtunneler_unit_tests PRIVATE
@@ -96,7 +142,7 @@ if(BUILD_TESTING)
     endif()
 
     if(WIN32)
-        target_link_libraries(dgramtunneler_unit_tests PRIVATE ws2_32)
+        target_link_libraries(dgramtunneler_unit_tests PRIVATE ws2_32 iphlpapi)
     endif()
 
     add_test(NAME unit_tests COMMAND dgramtunneler_unit_tests)
@@ -120,7 +166,7 @@ if(BUILD_TESTING)
         PASS_REGULAR_EXPRESSION "udp_destination = replicate_client")
 
     add_test(NAME producer_command
-        COMMAND dgramtunneler producer example-client --compact --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml" --count 2 --interval-ms 1)
+        COMMAND dgramtunneler producer example-client --config "${CMAKE_CURRENT_SOURCE_DIR}/tests/named_tunnels.toml" --count 2 --interval-ms 1)
     set_tests_properties(producer_command PROPERTIES
         PASS_REGULAR_EXPRESSION "Sent Dummy datagram #2")
 

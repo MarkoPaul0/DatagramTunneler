@@ -108,10 +108,12 @@ NamedTunnel makeTunnel(const std::string& alias, const TunnelFields& fields) {
 
     NamedTunnel tunnel;
     tunnel.alias = alias;
-    tunnel.config.udp_iface_ip_ = requiredField(fields, "udp_interface", alias);
-    if (!isIpv4Address(tunnel.config.udp_iface_ip_)) {
-        throw std::runtime_error("tunnel '" + alias + "' has an invalid udp_interface");
+    tunnel.config.udp_iface_reference_ = requiredField(fields, "udp_interface", alias);
+    const auto interface_address = resolveInterfaceIpv4(tunnel.config.udp_iface_reference_);
+    if (!interface_address.has_value()) {
+        throw std::runtime_error("tunnel '" + alias + "' has an invalid udp_interface; use a local interface name or IPv4 address");
     }
+    tunnel.config.udp_iface_ip_ = *interface_address;
 
     const std::string& mode = requiredField(fields, "mode", alias);
     if (mode == "client") {
@@ -254,7 +256,7 @@ void writeSampleConfiguration(const std::filesystem::path& path) {
     }
     output << R"(version = 1
 
-# Replace these values with the network addresses for your tunnel.
+# Replace these values with local interface names or IPv4 addresses.
 [tunnels.example-client]
 mode = "client"
 udp_interface = "192.168.1.20"

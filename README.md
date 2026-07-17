@@ -7,7 +7,15 @@
 
 DatagramTunneler tunnels UDP multicast datagrams over a TCP connection. A client joins a multicast group, forwards received datagrams to a server, and the server republishes them on its own subnet.
 
-It supports current Linux, macOS, and Windows 10/11 releases, direct command-line use, and reusable named tunnel definitions.
+Use it either from the command line or through the local browser dashboard. It supports current Linux, macOS, and Windows 10/11 releases, plus reusable named tunnel definitions.
+
+### CLI
+
+![DatagramTunneler command-line demo](doc/dgram-cli.gif)
+
+### Local dashboard
+
+![DatagramTunneler local control dashboard showing ingress and egress tunnel routes](doc/control-dashboard2.png)
 
 ## What it is for
 
@@ -50,12 +58,12 @@ Check your Debian architecture:
 dpkg --print-architecture
 ```
 
-The latest published release is **v2.0.0**. It currently provides a Debian
+The latest published release is **v2.1.0**. It currently provides a Debian
 package for AMD64 (`amd64`/`x86_64`):
 
 ```sh
-curl -fLO https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v2.0.0/dgramtunneler_2.0.0_amd64.deb
-sudo apt install ./dgramtunneler_2.0.0_amd64.deb
+curl -fLO https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v2.1.0/dgramtunneler_2.1.0_amd64.deb
+sudo apt install ./dgramtunneler_2.1.0_amd64.deb
 dgramtunneler --version
 ```
 
@@ -84,7 +92,7 @@ The latest release currently provides a Windows AMD64 ZIP. Download and verify
 it from PowerShell:
 
 ```powershell
-$version = "2.0.0"
+$version = "2.1.0"
 Invoke-WebRequest `
   -Uri "https://github.com/MarkoPaul0/DatagramTunneler/releases/download/v$version/dgramtunneler-$version-Windows-AMD64.zip" `
   -OutFile "dgramtunneler-$version-Windows-AMD64.zip"
@@ -149,6 +157,10 @@ Named definitions are stored in a versioned TOML configuration file. The default
 
 Use `--config <path>` with any configuration or tunnel command to select another file.
 
+`udp_interface` accepts either a local IPv4 address (for example,
+`192.168.1.20`) or a local interface name such as `en0`, `eth0`, or `Ethernet`.
+The name must resolve to an IPv4 address on the host running that tunnel.
+
 ```toml
 version = 1
 
@@ -167,26 +179,47 @@ udp_destination = "replicate_client"
 
 `config edit` creates the starter file if needed, then opens it using `$VISUAL`, `$EDITOR`, or TextEdit, `vi`, or Notepad. The parser rejects unknown fields, duplicate aliases, invalid IPv4 addresses, and invalid ports. `tunnel run` runs in the foreground.
 
-### Compact live output
+### Local control dashboard
 
-For a running tunnel, add `--compact` to keep one live statistics line and the
-five most recent events in the terminal:
+Start the localhost-only control service to use the supported browser dashboard:
 
 ```sh
-dgramtunneler tunnel run office-client --compact
+dgramtunneler control serve --port 8765
+open http://127.0.0.1:8765
 ```
 
-The built-in producer supports the same display:
+The dashboard provides tunnel lifecycle controls, a dummy-producer form,
+per-tunnel throughput and latency statistics, the ten most recent datagram
+observations, live events, and a TOML editor. See the [dashboard guide](docs/control-ui.md).
+
+It binds only to `127.0.0.1` and has no authentication, so do not expose it
+through a proxy or port forward.
+
+### Local control API
+
+The same localhost-only service exposes a versioned HTTP API and a WebSocket
+event stream for local automation and integrations. Start it with the command
+above, then use the [OpenAPI definition](docs/openapi.yaml) to generate a
+client or import it into an API tool. The [control API reference](docs/control-api.md)
+covers the event stream, error format, and compatibility policy.
+
+### Live terminal output
+
+On an interactive terminal, tunnels and the built-in producer use the compact
+live display by default: one statistics line and the five most recent events.
+Use `--verbose` for conventional line-by-line diagnostics, including heartbeat
+messages:
 
 ```sh
-dgramtunneler producer office-client --compact
+dgramtunneler tunnel run office-client --verbose
+dgramtunneler producer office-client --verbose
 ```
 
 The statistics show forwarded datagram count, average datagram size, and
 average throughput since the tunnel started. On a v2 server, they also show a
 rolling latency average, p50, p99, and maximum for the most recent 1,024
-datagrams. Compact mode activates only on an interactive terminal; when output
-is redirected, normal line-oriented logs are kept so they remain easy to
+datagrams. The compact display activates only on an interactive terminal; when
+output is redirected, normal line-oriented logs are kept so they remain easy to
 capture and process. Its statistics line identifies the active client, server,
 or producer route; event lines use short actions such as `forwarded`,
 `published`, and `sent` rather than repeating the route for every datagram.
@@ -214,8 +247,8 @@ client host on the same subnet from receiving and re-forwarding the packet.
 Start the server before the client.
 
 ```sh
-dgramtunneler --server -i <udp_iface_ip> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>]
-dgramtunneler --client -i <udp_iface_ip> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port>
+dgramtunneler --server -i <udp_interface> -t <tcp_listen_port> [-u <udp_dst_ip>:<port>]
+dgramtunneler --client -i <udp_interface> -t <tcp_srv_ip>:<tcp_srv_port> -u <udp_dst_ip>:<port>
 ```
 
 The server's `-u` destination is optional: when absent, it republishes each datagram to the multicast group encoded by the client.

@@ -1,0 +1,390 @@
+openapi: 3.1.0
+info:
+  title: DatagramTunneler Local Control API
+  version: v1
+  description: |
+    A localhost-only API for inspecting and operating DatagramTunneler named
+    tunnels and dummy producers. Start it with `dgramtunneler control serve`.
+
+    The service binds to `127.0.0.1` and has no authentication. Do not expose
+    it through a proxy, port forward, or non-loopback network interface.
+  license:
+    name: GPL-3.0-only
+    url: https://www.gnu.org/licenses/gpl-3.0.en.html
+servers:
+  - url: http://127.0.0.1:{port}
+    description: Local control service
+    variables:
+      port:
+        default: '8765'
+externalDocs:
+  description: API usage, WebSocket events, and compatibility policy
+  url: control-api.md
+tags:
+  - name: Service
+  - name: Tunnels
+  - name: Runtimes
+  - name: Configuration
+paths:
+  /api/v1/health:
+    get:
+      tags: [Service]
+      summary: Read service readiness
+      operationId: health
+      responses:
+        '200':
+          description: The control service is ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/v1/tunnels:
+    get:
+      tags: [Tunnels]
+      summary: List named tunnels
+      operationId: listTunnels
+      responses:
+        '200':
+          description: Saved tunnel definitions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tunnels]
+                properties:
+                  tunnels:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TunnelSummary'
+  /api/v1/tunnels/{alias}:
+    parameters:
+      - $ref: '#/components/parameters/Alias'
+    get:
+      tags: [Tunnels]
+      summary: Read a named tunnel
+      operationId: getTunnel
+      responses:
+        '200':
+          description: The requested saved tunnel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tunnel'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+  /api/v1/tunnels/{alias}/start:
+    parameters:
+      - $ref: '#/components/parameters/Alias'
+    post:
+      tags: [Tunnels]
+      summary: Start a named tunnel
+      operationId: startTunnel
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+  /api/v1/tunnels/{alias}/stop:
+    parameters:
+      - $ref: '#/components/parameters/Alias'
+    post:
+      tags: [Tunnels]
+      summary: Request graceful tunnel shutdown
+      operationId: stopTunnel
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+  /api/v1/tunnels/{alias}/restart:
+    parameters:
+      - $ref: '#/components/parameters/Alias'
+    post:
+      tags: [Tunnels]
+      summary: Restart a named tunnel
+      operationId: restartTunnel
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+  /api/v1/tunnels/{alias}/producer/start:
+    parameters:
+      - $ref: '#/components/parameters/Alias'
+    post:
+      tags: [Tunnels]
+      summary: Start a dummy producer for a client tunnel
+      operationId: startProducer
+      requestBody:
+        $ref: '#/components/requestBodies/ProducerOptions'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+  /api/v1/tunnels/{alias}/producer/stop:
+    parameters:
+      - $ref: '#/components/parameters/Alias'
+    post:
+      tags: [Tunnels]
+      summary: Request graceful producer shutdown
+      operationId: stopProducer
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+  /api/v1/tunnels/{alias}/producer/restart:
+    parameters:
+      - $ref: '#/components/parameters/Alias'
+    post:
+      tags: [Tunnels]
+      summary: Restart a dummy producer
+      operationId: restartProducer
+      requestBody:
+        $ref: '#/components/requestBodies/ProducerOptions'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+  /api/v1/runtimes:
+    get:
+      tags: [Runtimes]
+      summary: List live tunnel and producer runtimes
+      operationId: listRuntimes
+      responses:
+        '200':
+          description: Current runtime snapshots.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runtimes]
+                properties:
+                  runtimes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Runtime'
+  /api/v1/config:
+    get:
+      tags: [Configuration]
+      summary: Read the active TOML configuration
+      operationId: getConfiguration
+      responses:
+        '200':
+          description: The active named-tunnels configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Configuration'
+    put:
+      tags: [Configuration]
+      summary: Validate and replace the active TOML configuration
+      operationId: updateConfiguration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Configuration'
+      responses:
+        '200':
+          description: The configuration was replaced.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated]
+                properties:
+                  updated:
+                    type: boolean
+                    const: true
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+components:
+  parameters:
+    Alias:
+      name: alias
+      in: path
+      required: true
+      schema:
+        type: string
+      description: A configured tunnel alias. URL-encode reserved characters.
+  requestBodies:
+    ProducerOptions:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProducerOptions'
+  responses:
+    Accepted:
+      description: The requested operation was accepted and proceeds asynchronously.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Accepted'
+    InvalidRequest:
+      description: The operation or request data is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Health:
+      type: object
+      required: [service, api_version, ready]
+      properties:
+        service:
+          type: string
+          const: dgramtunneler
+        api_version:
+          type: string
+          const: v1
+        ready:
+          type: boolean
+          const: true
+    Accepted:
+      type: object
+      required: [accepted]
+      properties:
+        accepted:
+          type: boolean
+          const: true
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: invalid_request
+            message:
+              type: string
+    TunnelSummary:
+      type: object
+      required: [alias, mode, udp_destination, equivalent_direct_command]
+      properties:
+        alias:
+          type: string
+          example: office-client
+        mode:
+          type: string
+          enum: [client, server]
+        udp_destination:
+          type: string
+          example: 239.1.2.3:5000
+        equivalent_direct_command:
+          type: string
+          example: dgramtunneler --client -i 192.168.1.20 -t 192.168.1.10:14052 -u 239.1.2.3:5000
+    Tunnel:
+      type: object
+      required: [alias, mode]
+      properties:
+        alias:
+          type: string
+        mode:
+          type: string
+          enum: [client, server]
+        udp_destination:
+          type: string
+          description: Present when the tunnel summary provides a destination.
+    Runtime:
+      type: object
+      required: [alias, kind, state, detail, metrics, recent_datagrams]
+      properties:
+        alias:
+          type: string
+        kind:
+          type: string
+          enum: [tunnel, producer]
+        state:
+          type: string
+          enum: [stopped, starting, connecting, connected, running, stopping, failed]
+        detail:
+          type: string
+        metrics:
+          $ref: '#/components/schemas/RuntimeMetrics'
+        recent_datagrams:
+          type: array
+          description: Up to ten recent observations, oldest first. Payloads are never retained.
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/DatagramDetail'
+    RuntimeMetrics:
+      type: object
+      required:
+        - datagram_count
+        - byte_count
+        - throughput_bytes_per_second
+        - average_latency_milliseconds
+        - p50_latency_milliseconds
+        - p99_latency_milliseconds
+        - maximum_latency_milliseconds
+      properties:
+        datagram_count:
+          type: integer
+          minimum: 0
+        byte_count:
+          type: integer
+          minimum: 0
+        throughput_bytes_per_second:
+          type: number
+          minimum: 0
+        average_latency_milliseconds:
+          type: [number, 'null']
+        p50_latency_milliseconds:
+          type: [number, 'null']
+        p99_latency_milliseconds:
+          type: [number, 'null']
+        maximum_latency_milliseconds:
+          type: [number, 'null']
+    DatagramDetail:
+      type: object
+      required: [timestamp_unix_milliseconds, bytes, latency_milliseconds]
+      properties:
+        timestamp_unix_milliseconds:
+          type: integer
+          format: int64
+          description: UTC Unix time in milliseconds.
+        bytes:
+          type: integer
+          minimum: 0
+        latency_milliseconds:
+          type: [number, 'null']
+          description: Available only when a server can calculate it.
+    ProducerOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        interval_milliseconds:
+          type: integer
+          minimum: 1
+          maximum: 4294967295
+          default: 1000
+        count:
+          type: integer
+          minimum: 1
+          description: Omit to continue until stopped.
+        payload_prefix:
+          type: string
+          default: Dummy datagram
+    Configuration:
+      type: object
+      required: [toml]
+      properties:
+        toml:
+          type: string
+          description: Complete named-tunnel TOML configuration.
+x-websocket:
+  /api/v1/events:
+    description: |
+      WebSocket event stream. The server sends event messages; clients do not
+      issue commands on the socket. A connected client receives a complete
+      initial runtime snapshot, then a bounded metrics snapshot for each active
+      runtime once per second. See `docs/control-api.md` for its message schema
+      and reconnect behaviour.
